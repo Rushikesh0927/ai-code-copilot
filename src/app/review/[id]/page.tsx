@@ -12,13 +12,14 @@ import Link from 'next/link';
 // NOTE: In Next.js App Router, this is a Server Component by default.
 // It fetches data before sending HTML to the client.
 
+import { AnalyzerService } from '../../../services/analyzer.service';
+
+const analyzer = new AnalyzerService();
+
 async function getResults(id: string): Promise<ReviewResult | null> {
-  // We need absolute URL for fetch in SSR
-  const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
   try {
-    const res = await fetch(`${baseUrl}/api/review?jobId=${id}`, { cache: 'no-store' });
-    if (!res.ok) return null;
-    return res.json();
+    const results = await analyzer.getResults(id);
+    return results;
   } catch (e) {
     console.error("Error fetching review results", e);
     return null;

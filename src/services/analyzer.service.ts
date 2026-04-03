@@ -77,7 +77,7 @@ export class AnalyzerService {
   // ============================================================
   // SECTION: Start PR Analysis (Async Background Task)
   // ============================================================
-  async startPRAnalysis(owner: string, repo: string, prNumber: number, url: string): Promise<string> {
+  async startPRAnalysis(owner: string, repo: string, prNumber: number, url: string, userId?: string, userName?: string): Promise<string> {
     const jobId = uuidv4();
 
     await supabase.from('jobs').insert({
@@ -88,6 +88,8 @@ export class AnalyzerService {
       total_files: 0,
       processed_files: 0,
       started_at: new Date().toISOString(),
+      user_id: userId || null,
+      user_name: userName || null
     });
 
     this.processPRBackground(jobId, owner, repo, prNumber, url).catch(async (err: any) => {
@@ -101,7 +103,7 @@ export class AnalyzerService {
   // ============================================================
   // SECTION: Start Repo Analysis (Async Background Task)
   // ============================================================
-  async startRepoAnalysis(owner: string, repo: string, branch: string | undefined, url: string): Promise<string> {
+  async startRepoAnalysis(owner: string, repo: string, branch: string | undefined, url: string, userId?: string, userName?: string): Promise<string> {
     const jobId = uuidv4();
 
     await supabase.from('jobs').insert({
@@ -112,6 +114,8 @@ export class AnalyzerService {
       total_files: 0,
       processed_files: 0,
       started_at: new Date().toISOString(),
+      user_id: userId || null,
+      user_name: userName || null
     });
 
     this.processRepoBackground(jobId, owner, repo, branch, url).catch(async (err: any) => {
@@ -294,6 +298,9 @@ export class AnalyzerService {
     const summary = this.formatter.generateSummary(findings);
     summary.architectureReview = architectureReview;
 
+    // Fetch the user data from the job to persist into the result
+    const { data: job } = await supabase.from('jobs').select('user_id, user_name').eq('id', jobId).single();
+
     await supabase.from('results').insert({
       id: jobId,
       url,
@@ -306,6 +313,8 @@ export class AnalyzerService {
       summary,
       created_at: new Date().toISOString(),
       duration_ms: durationMs,
+      user_id: job?.user_id || null,
+      user_name: job?.user_name || null,
     });
 
     await this.updateJob(jobId, { status: 'COMPLETE', progress: 100 });

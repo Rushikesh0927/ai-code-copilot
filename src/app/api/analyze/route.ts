@@ -14,7 +14,7 @@ const analyzer = new AnalyzerService();
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { url } = body;
+    const { url, userId, userName } = body;
 
     if (!url) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
@@ -33,14 +33,18 @@ export async function POST(req: Request) {
         parsedUrl.owner,
         parsedUrl.repo,
         parsedUrl.prNumber!,
-        url
+        url,
+        userId,
+        userName
       );
     } else {
       jobId = await analyzer.startRepoAnalysis(
         parsedUrl.owner,
         parsedUrl.repo,
         parsedUrl.branch,
-        url
+        url,
+        userId,
+        userName
       );
     }
 
