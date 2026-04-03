@@ -6,6 +6,6 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  experimental: { serverActions: { allowedOrigins: ['*'] } },
+  experimental: { serverActions: { allowedOrigins: ['ai-code-copilot.onrender.com', 'localhost:3000'] } },
 }
 module.exports = nextConfig

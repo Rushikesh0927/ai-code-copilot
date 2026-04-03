@@ -18,8 +18,8 @@ interface FindingCardProps {
 export default function FindingCard({ finding }: FindingCardProps) {
   const [expanded, setExpanded] = useState(false);
   
-  const severityStyles = SEVERITY_CONFIG[finding.severity];
-  const categoryMeta = CATEGORY_CONFIG[finding.category];
+  const severityStyles = SEVERITY_CONFIG[finding.severity] || { color: '#94a3b8', bgColor: '#1e293b', icon: '❓', label: finding.severity || 'Unknown' };
+  const categoryMeta = CATEGORY_CONFIG[finding.category] || { icon: '❓', label: finding.category || 'Unknown' };
 
   return (
     <div 
