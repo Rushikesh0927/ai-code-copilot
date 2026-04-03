@@ -533,11 +533,13 @@ function DependencyGraph({ correlations }: { correlations: Correlation[] }) {
   const hoverRef = useRef<GNode | null>(null);
   const animRef = useRef<number>(0);
 
-  // Build graph data from correlations
+  const CW = 1200, CH = 600; // Canvas logical size
+
+  // Build graph data from correlations — circular initial layout
   useEffect(() => {
     const nodeMap = new Map<string, GNode>();
+    const edgeSet = new Set<string>(); // deduplicate edges
     const edges: GEdge[] = [];
-    const W = 700, H = 400;
 
     correlations.forEach(c => {
       const files = c.files || [];
@@ -545,28 +547,42 @@ function DependencyGraph({ correlations }: { correlations: Correlation[] }) {
         const short = f.split('/').pop() || f;
         if (!nodeMap.has(short)) {
           nodeMap.set(short, {
-            id: short, x: 80 + Math.random() * (W - 160), y: 60 + Math.random() * (H - 120),
-            vx: 0, vy: 0, radius: 6, color: '#3b82f6'
+            id: short, x: 0, y: 0, vx: 0, vy: 0, radius: 5, color: '#3b82f6'
           });
         }
-        // Increase node size based on how many correlations it appears in
         const n = nodeMap.get(short)!;
-        n.radius = Math.min(18, n.radius + 2);
-        n.color = EDGE_COLORS[c.severity] || '#3b82f6';
+        n.radius = Math.min(16, n.radius + 1.5);
+        // Use highest severity color
+        const sevOrder = ['INFORMATIONAL', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+        const curIdx = sevOrder.indexOf(Object.entries(EDGE_COLORS).find(([, v]) => v === n.color)?.[0] || '');
+        const newIdx = sevOrder.indexOf(c.severity);
+        if (newIdx > curIdx) n.color = EDGE_COLORS[c.severity] || '#3b82f6';
       });
-      // Create edges between all pairs of files in this correlation
+      // Deduplicated edges
       for (let i = 0; i < files.length; i++) {
         for (let j = i + 1; j < files.length; j++) {
           const a = files[i].split('/').pop() || files[i];
           const b = files[j].split('/').pop() || files[j];
-          if (a !== b) {
+          const key = [a, b].sort().join('|');
+          if (a !== b && !edgeSet.has(key)) {
+            edgeSet.add(key);
             edges.push({ source: a, target: b, color: EDGE_COLORS[c.severity] || '#3b82f6', label: c.title });
           }
         }
       }
     });
 
-    nodesRef.current = Array.from(nodeMap.values());
+    // Circular initial layout — prevents random clustering
+    const allNodes = Array.from(nodeMap.values());
+    const cx = CW / 2, cy = CH / 2;
+    const radius = Math.min(CW, CH) * 0.38;
+    allNodes.forEach((n, i) => {
+      const angle = (2 * Math.PI * i) / allNodes.length;
+      n.x = cx + radius * Math.cos(angle);
+      n.y = cy + radius * Math.sin(angle);
+    });
+
+    nodesRef.current = allNodes;
     edgesRef.current = edges;
   }, [correlations]);
 
@@ -575,15 +591,16 @@ function DependencyGraph({ correlations }: { correlations: Correlation[] }) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const W = canvas.width, H = canvas.height;
     const nodes = nodesRef.current;
     const edges = edgesRef.current;
+    if (nodes.length === 0) return;
 
-    // Simple force simulation step
-    const REPULSION = 3000;
-    const SPRING = 0.005;
-    const DAMPING = 0.85;
-    const REST_LEN = 120;
+    // Force simulation
+    const REPULSION = 12000;
+    const SPRING = 0.003;
+    const DAMPING = 0.82;
+    const REST_LEN = 200;
+    const CENTER_PULL = 0.001;
 
     for (const n of nodes) { n.vx = 0; n.vy = 0; }
 
@@ -615,19 +632,25 @@ function DependencyGraph({ correlations }: { correlations: Correlation[] }) {
       b.vx -= fx; b.vy -= fy;
     }
 
-    // Apply velocity with damping, constrain to bounds
+    // Gentle center gravity to prevent drifting off
+    for (const n of nodes) {
+      n.vx += (CW / 2 - n.x) * CENTER_PULL;
+      n.vy += (CH / 2 - n.y) * CENTER_PULL;
+    }
+
+    // Apply velocity, constrain to bounds
     for (const n of nodes) {
       if (dragRef.current.node === n) continue;
       n.x += n.vx * DAMPING;
       n.y += n.vy * DAMPING;
-      n.x = Math.max(n.radius + 10, Math.min(W - n.radius - 10, n.x));
-      n.y = Math.max(n.radius + 10, Math.min(H - n.radius - 10, n.y));
+      n.x = Math.max(60, Math.min(CW - 60, n.x));
+      n.y = Math.max(40, Math.min(CH - 40, n.y));
     }
 
-    // Clear and draw
-    ctx.clearRect(0, 0, W, H);
+    // Clear
+    ctx.clearRect(0, 0, CW, CH);
     ctx.fillStyle = '#0b1120';
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0, 0, CW, CH);
 
     // Draw edges
     for (const e of edges) {
@@ -637,53 +660,89 @@ function DependencyGraph({ correlations }: { correlations: Correlation[] }) {
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
-      ctx.strokeStyle = e.color + '66';
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = e.color + '44';
+      ctx.lineWidth = 1;
       ctx.stroke();
     }
 
     // Draw nodes
+    const hoveredNode = hoverRef.current;
     for (const n of nodes) {
-      // Glow
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, n.radius + 4, 0, Math.PI * 2);
-      ctx.fillStyle = n.color + '22';
-      ctx.fill();
-      // Node
+      const isHovered = hoveredNode === n;
+      const isConnected = hoveredNode && edges.some(e => 
+        (e.source === hoveredNode.id && e.target === n.id) || (e.target === hoveredNode.id && e.source === n.id)
+      );
+      const dimmed = hoveredNode && !isHovered && !isConnected;
+      
+      // Glow for hovered/connected nodes
+      if (isHovered || isConnected) {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.radius + 6, 0, Math.PI * 2);
+        ctx.fillStyle = n.color + '33';
+        ctx.fill();
+      }
+      // Node circle
       ctx.beginPath();
       ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
-      ctx.fillStyle = hoverRef.current === n ? '#fff' : n.color;
+      ctx.fillStyle = dimmed ? (n.color + '44') : (isHovered ? '#fff' : n.color);
       ctx.fill();
-      ctx.strokeStyle = '#1e293b';
+      ctx.strokeStyle = dimmed ? '#1e293b44' : '#1e293b';
       ctx.lineWidth = 1;
       ctx.stroke();
-      // Label
-      ctx.fillStyle = '#cbd5e1';
-      ctx.font = '10px monospace';
+
+      // Label — always show but dim non-hovered
+      ctx.fillStyle = dimmed ? '#64748b44' : (isHovered || isConnected ? '#f1f5f9' : '#94a3b8');
+      ctx.font = isHovered ? 'bold 11px monospace' : '9px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(n.id, n.x, n.y + n.radius + 14);
+      ctx.fillText(n.id, n.x, n.y + n.radius + 13);
     }
 
-    // Tooltip
-    if (hoverRef.current) {
-      const n = hoverRef.current;
+    // Highlight edges connected to hovered node
+    if (hoveredNode) {
+      for (const e of edges) {
+        if (e.source !== hoveredNode.id && e.target !== hoveredNode.id) continue;
+        const a = nodes.find(n => n.id === e.source);
+        const b = nodes.find(n => n.id === e.target);
+        if (!a || !b) continue;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.strokeStyle = e.color + 'cc';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+      }
+    }
+
+    // Tooltip on hover
+    if (hoveredNode) {
+      const n = hoveredNode;
       const relEdges = edges.filter(e => e.source === n.id || e.target === n.id);
-      const tipLines = [`📄 ${n.id}`, ...relEdges.map(e => `↔ ${e.label}`)];
-      const maxW = Math.max(...tipLines.map(l => ctx.measureText(l).width)) + 16;
-      const tipH = tipLines.length * 16 + 12;
+      const connections = relEdges.map(e => e.source === n.id ? e.target : e.source);
+      const uniqueConns = [...new Set(connections)];
+      const tipLines = [
+        `📄 ${n.id}`,
+        `🔗 ${uniqueConns.length} connection${uniqueConns.length !== 1 ? 's' : ''}`,
+        ...relEdges.slice(0, 4).map(e => `  ↔ ${e.label.substring(0, 40)}`)
+      ];
+      if (relEdges.length > 4) tipLines.push(`  ... +${relEdges.length - 4} more`);
+      
+      ctx.font = '11px monospace';
+      const maxW = Math.max(...tipLines.map(l => ctx.measureText(l).width)) + 20;
+      const tipH = tipLines.length * 16 + 14;
       let tx = n.x + 20, ty = n.y - tipH / 2;
-      if (tx + maxW > W) tx = n.x - maxW - 20;
-      if (ty < 0) ty = 4;
-      ctx.fillStyle = '#1e293bdd';
+      if (tx + maxW > CW) tx = n.x - maxW - 20;
+      if (ty < 4) ty = 4;
+      if (ty + tipH > CH - 4) ty = CH - tipH - 4;
+
+      ctx.fillStyle = '#0f172aee';
       ctx.strokeStyle = '#334155';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.roundRect(tx, ty, maxW, tipH, 6);
       ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#e2e8f0';
-      ctx.font = '11px monospace';
       ctx.textAlign = 'left';
-      tipLines.forEach((l, i) => ctx.fillText(l, tx + 8, ty + 16 + i * 16));
+      tipLines.forEach((l, i) => ctx.fillText(l, tx + 10, ty + 17 + i * 16));
     }
 
     animRef.current = requestAnimationFrame(draw);
@@ -694,30 +753,41 @@ function DependencyGraph({ correlations }: { correlations: Correlation[] }) {
     return () => cancelAnimationFrame(animRef.current);
   }, [draw]);
 
+  // Scale mouse coords from CSS size to canvas logical size
   const getNode = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const rect = canvasRef.current!.getBoundingClientRect();
-    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    return nodesRef.current.find(n => Math.hypot(n.x - mx, n.y - my) <= n.radius + 4) || null;
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = CW / rect.width;
+    const scaleY = CH / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleY;
+    return nodesRef.current.find(n => Math.hypot(n.x - mx, n.y - my) <= n.radius + 6) || null;
   };
 
   return (
     <canvas
       ref={canvasRef}
-      width={700}
-      height={400}
-      style={{ width: '100%', height: 400, borderRadius: 8, border: '1px solid #1e293b', cursor: dragRef.current.node ? 'grabbing' : 'default' }}
+      width={CW}
+      height={CH}
+      style={{ width: '100%', height: 480, borderRadius: 8, border: '1px solid #1e293b', cursor: 'default', background: '#0b1120' }}
       onMouseDown={(e) => {
         const n = getNode(e);
         if (n) {
-          const rect = canvasRef.current!.getBoundingClientRect();
-          dragRef.current = { node: n, offsetX: e.clientX - rect.left - n.x, offsetY: e.clientY - rect.top - n.y };
+          const canvas = canvasRef.current!;
+          const rect = canvas.getBoundingClientRect();
+          const scaleX = CW / rect.width;
+          const scaleY = CH / rect.height;
+          dragRef.current = { node: n, offsetX: (e.clientX - rect.left) * scaleX - n.x, offsetY: (e.clientY - rect.top) * scaleY - n.y };
         }
       }}
       onMouseMove={(e) => {
         if (dragRef.current.node) {
-          const rect = canvasRef.current!.getBoundingClientRect();
-          dragRef.current.node.x = e.clientX - rect.left - dragRef.current.offsetX;
-          dragRef.current.node.y = e.clientY - rect.top - dragRef.current.offsetY;
+          const canvas = canvasRef.current!;
+          const rect = canvas.getBoundingClientRect();
+          const scaleX = CW / rect.width;
+          const scaleY = CH / rect.height;
+          dragRef.current.node.x = (e.clientX - rect.left) * scaleX - dragRef.current.offsetX;
+          dragRef.current.node.y = (e.clientY - rect.top) * scaleY - dragRef.current.offsetY;
         }
         hoverRef.current = getNode(e);
       }}
