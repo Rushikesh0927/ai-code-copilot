@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import InputForm from '../components/InputForm';
 import StatusTracker from '../components/StatusTracker';
 import { AnalysisJob } from '../types/analysis.types';
-import { useSession, signIn } from 'next-auth/react';
+import { useSession, signIn, signOut } from 'next-auth/react';
 
 export default function Home() {
   const router = useRouter();
@@ -76,6 +76,21 @@ export default function Home() {
 
   return (
     <>
+      {status === 'authenticated' && session?.user && (
+        <div style={{ position: 'absolute', top: '24px', right: '40px', display: 'flex', alignItems: 'center', gap: '12px', zIndex: 100 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(30, 41, 59, 0.5)', padding: '6px 12px', borderRadius: '20px', border: '1px solid #334155' }}>
+            {session.user.image && <img src={session.user.image} alt="Profile" style={{ width: '28px', height: '28px', borderRadius: '50%' }} />}
+            <span style={{ color: '#cbd5e1', fontSize: '14px', fontWeight: 500 }}>{session.user.name || 'GitHub User'}</span>
+          </div>
+          <button 
+            onClick={() => signOut()}
+            style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', padding: '6px 14px', borderRadius: '20px', fontSize: '13px', cursor: 'pointer' }}
+          >
+            Log Out
+          </button>
+        </div>
+      )}
+
       {status === 'unauthenticated' && showWelcomeModal && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
