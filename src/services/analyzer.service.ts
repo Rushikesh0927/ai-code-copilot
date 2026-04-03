@@ -141,23 +141,29 @@ export class AnalyzerService {
 
       const allFindings: Finding[] = [];
 
-      // 2. Ingestion Phase — Embed files into Supabase pgvector
-      for (const file of filesToReview) {
-        const textToEmbed = (file.patch || "").substring(0, 5000);
-        const vec = await this.ai.generateEmbedding(textToEmbed);
-        if (vec.length > 0) {
-          await supabase.from('file_embeddings').insert({
-            job_id: jobId,
-            path: file.filename,
-            content: file.patch!.substring(0, 8000),
-            embedding: JSON.stringify(vec),
-          });
-        }
+      // 2. Ingestion Phase — Embed files into Supabase pgvector (BATCHED)
+      const EMBED_BATCH = 10;
+      for (let ei = 0; ei < filesToReview.length; ei += EMBED_BATCH) {
+        const embedBatch = filesToReview.slice(ei, ei + EMBED_BATCH);
+        await Promise.all(embedBatch.map(async (file) => {
+          try {
+            const textToEmbed = (file.patch || "").substring(0, 5000);
+            const vec = await this.ai.generateEmbedding(textToEmbed);
+            if (vec.length > 0) {
+              await supabase.from('file_embeddings').insert({
+                job_id: jobId,
+                path: file.filename,
+                content: file.patch!.substring(0, 8000),
+                embedding: JSON.stringify(vec),
+              });
+            }
+          } catch (e) { console.error(`Embed error ${file.filename}:`, e); }
+        }));
       }
 
       // 4. Analyze with RAG context from pgvector
       let processedFiles = 0;
-      const MAX_CONCURRENT = 15;
+      const MAX_CONCURRENT = 10;
       
       for (let i = 0; i < filesToReview.length; i += MAX_CONCURRENT) {
         const batch = filesToReview.slice(i, i + MAX_CONCURRENT);
@@ -167,10 +173,14 @@ export class AnalyzerService {
         const batchPromises = batch.map(async (file) => {
           try {
             let relatedContext = '';
-            const currentVec = await this.ai.generateEmbedding((file.patch || "").substring(0, 5000));
-            if (currentVec.length > 0) {
+            
+            // Re-use the embedding we just inserted in Phase 2
+            const { data: fe } = await supabase.from('file_embeddings').select('embedding').eq('job_id', jobId).eq('path', file.filename).single();
+            const currentVecStr = fe?.embedding;
+
+            if (currentVecStr) {
               const { data: matches } = await supabase.rpc('match_related_files', {
-                query_embedding: JSON.stringify(currentVec),
+                query_embedding: currentVecStr,
                 match_threshold: 0.6,
                 match_count: 2,
                 p_job_id: jobId,
@@ -218,18 +228,24 @@ export class AnalyzerService {
       const totalLines = filesToReview.reduce((sum, file) => sum + file.lines, 0);
       await this.updateJob(jobId, { total_files: filesToReview.length });
 
-      // 3. Ingestion Phase — Embed files into Supabase pgvector
-      for (const file of filesToReview) {
-        const textToEmbed = file.content.substring(0, 5000);
-        const vec = await this.ai.generateEmbedding(textToEmbed);
-        if (vec.length > 0) {
-          await supabase.from('file_embeddings').insert({
-            job_id: jobId,
-            path: file.path,
-            content: file.content.substring(0, 8000),
-            embedding: JSON.stringify(vec),
-          });
-        }
+      // 3. Ingestion Phase — Embed files into Supabase pgvector (BATCHED)
+      const EMBED_BATCH = 10;
+      for (let ei = 0; ei < filesToReview.length; ei += EMBED_BATCH) {
+        const embedBatch = filesToReview.slice(ei, ei + EMBED_BATCH);
+        await Promise.all(embedBatch.map(async (file) => {
+          try {
+            const textToEmbed = file.content.substring(0, 5000);
+            const vec = await this.ai.generateEmbedding(textToEmbed);
+            if (vec.length > 0) {
+              await supabase.from('file_embeddings').insert({
+                job_id: jobId,
+                path: file.path,
+                content: file.content.substring(0, 8000),
+                embedding: JSON.stringify(vec),
+              });
+            }
+          } catch (e) { console.error(`Embed error ${file.path}:`, e); }
+        }));
       }
 
       await this.updateJob(jobId, { status: 'ANALYZING' });
@@ -238,7 +254,7 @@ export class AnalyzerService {
 
       // 4. Analyze with RAG context from pgvector
       let processedFiles = 0;
-      const MAX_CONCURRENT = 15;
+      const MAX_CONCURRENT = 10;
 
       for (let i = 0; i < filesToReview.length; i += MAX_CONCURRENT) {
         const batch = filesToReview.slice(i, i + MAX_CONCURRENT);
@@ -248,10 +264,14 @@ export class AnalyzerService {
         const batchPromises = batch.map(async (file) => {
           try {
             let relatedContext = '';
-            const currentVec = await this.ai.generateEmbedding(file.content.substring(0, 5000));
-            if (currentVec.length > 0) {
+            
+            // Re-use the embedding we just inserted in Phase 3
+            const { data: fe } = await supabase.from('file_embeddings').select('embedding').eq('job_id', jobId).eq('path', file.path).single();
+            const currentVecStr = fe?.embedding;
+
+            if (currentVecStr) {
               const { data: matches } = await supabase.rpc('match_related_files', {
-                query_embedding: JSON.stringify(currentVec),
+                query_embedding: currentVecStr,
                 match_threshold: 0.6,
                 match_count: 2,
                 p_job_id: jobId,

@@ -28,7 +28,7 @@ export class AIReviewService {
   // ============================================================
   async generateEmbedding(text: string): Promise<number[]> {
     try {
-      const embedModel = this.genAI.getGenerativeModel({ model: "text-embedding-004" });
+      const embedModel = this.genAI.getGenerativeModel({ model: "gemini-embedding-exp-03-07" });
       const result = await embedModel.embedContent(text);
       return result.embedding.values;
     } catch (err) {
@@ -182,8 +182,12 @@ Output EXACTLY this JSON structure. Do not use Markdown formatting outside the J
     try {
       const result = await model.generateContent(prompt);
       let text = result.response.text();
-      if (text.startsWith('\`\`\`json')) text = text.replace(/^\`\`\`json/, '').replace(/\`\`\`$/, '');
-      const parsed = JSON.parse(text.trim());
+      // Robust JSON extraction: strip markdown fences, find JSON object
+      text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+      // Try to find the JSON object if there's extra text around it
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('No JSON object found in response');
+      const parsed = JSON.parse(jsonMatch[0].trim());
       return {
         correlations: parsed.correlations || [],
         architectureReview: parsed.architectureReview || "Analysis completed successfully."

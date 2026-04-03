@@ -5,8 +5,8 @@
 
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { ReviewResult, Finding, Severity, Category } from '../types/review.types';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { ReviewResult, Finding, Severity, Category, Correlation } from '../types/review.types';
 import { FormatterService } from '../services/formatter.service';
 import { useSession, signIn } from 'next-auth/react';
 
@@ -401,23 +401,32 @@ export default function ReviewDashboard({ result }: Props) {
             {(!result.correlations || result.correlations.length === 0) ? (
               <div style={{ textAlign: 'center', padding: 32, color: '#94a3b8' }}>No correlation clusters detected.</div>
             ) : (
-              result.correlations.map((c, i) => (
-                <div key={c.id || i} style={styles.clusterCard}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500 }}>{c.id || `CLU-${String.fromCharCode(65 + i)}`} — {c.title}</div>
-                    <span style={{ ...styles.badge, background: SEV_COLORS[c.severity]?.bg, color: SEV_COLORS[c.severity]?.text }}>{c.severity}</span>
-                  </div>
-                  <div style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.7, marginBottom: 10 }}>{c.description}</div>
-                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>{c.relationship}</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
-                    {c.issues.map(iss => <span key={iss} style={styles.corrChip}>#{iss}</span>)}
-                  </div>
-                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Affected components:</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {c.files.map(f => <span key={f} style={styles.fileChip}>{f}</span>)}
-                  </div>
+              <>
+                {/* Interactive Dependency Graph */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0', marginBottom: 10 }}>📊 Structural Dependency Graph</div>
+                  <DependencyGraph correlations={result.correlations} />
                 </div>
-              ))
+
+                {/* Correlation Cards */}
+                {result.correlations.map((c, i) => (
+                  <div key={c.id || i} style={styles.clusterCard}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                      <div style={{ fontSize: 14, fontWeight: 500 }}>{c.id || `CLU-${String.fromCharCode(65 + i)}`} — {c.title}</div>
+                      <span style={{ ...styles.badge, background: SEV_COLORS[c.severity]?.bg, color: SEV_COLORS[c.severity]?.text }}>{c.severity}</span>
+                    </div>
+                    <div style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.7, marginBottom: 10 }}>{c.description}</div>
+                    <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>{c.relationship}</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                      {c.issues.map(iss => <span key={iss} style={styles.corrChip}>#{iss}</span>)}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Affected components:</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {c.files.map(f => <span key={f} style={styles.fileChip}>{f}</span>)}
+                    </div>
+                  </div>
+                ))}
+              </>
             )}
           </div>
         )}
@@ -504,6 +513,217 @@ function FbSection({ label, children }: { label: string; children: React.ReactNo
       <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 5, letterSpacing: 0.5 }}>{label}</div>
       {children}
     </div>
+  );
+}
+
+// ====================== Dependency Graph ======================
+
+const EDGE_COLORS: Record<string, string> = {
+  CRITICAL: '#E24B4A', HIGH: '#BA7517', MEDIUM: '#3b82f6', LOW: '#3B6D11', INFORMATIONAL: '#534AB7'
+};
+
+interface GNode { id: string; x: number; y: number; vx: number; vy: number; radius: number; color: string; }
+interface GEdge { source: string; target: string; color: string; label: string; }
+
+function DependencyGraph({ correlations }: { correlations: Correlation[] }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const nodesRef = useRef<GNode[]>([]);
+  const edgesRef = useRef<GEdge[]>([]);
+  const dragRef = useRef<{ node: GNode | null; offsetX: number; offsetY: number }>({ node: null, offsetX: 0, offsetY: 0 });
+  const hoverRef = useRef<GNode | null>(null);
+  const animRef = useRef<number>(0);
+
+  // Build graph data from correlations
+  useEffect(() => {
+    const nodeMap = new Map<string, GNode>();
+    const edges: GEdge[] = [];
+    const W = 700, H = 400;
+
+    correlations.forEach(c => {
+      const files = c.files || [];
+      files.forEach(f => {
+        const short = f.split('/').pop() || f;
+        if (!nodeMap.has(short)) {
+          nodeMap.set(short, {
+            id: short, x: 80 + Math.random() * (W - 160), y: 60 + Math.random() * (H - 120),
+            vx: 0, vy: 0, radius: 6, color: '#3b82f6'
+          });
+        }
+        // Increase node size based on how many correlations it appears in
+        const n = nodeMap.get(short)!;
+        n.radius = Math.min(18, n.radius + 2);
+        n.color = EDGE_COLORS[c.severity] || '#3b82f6';
+      });
+      // Create edges between all pairs of files in this correlation
+      for (let i = 0; i < files.length; i++) {
+        for (let j = i + 1; j < files.length; j++) {
+          const a = files[i].split('/').pop() || files[i];
+          const b = files[j].split('/').pop() || files[j];
+          if (a !== b) {
+            edges.push({ source: a, target: b, color: EDGE_COLORS[c.severity] || '#3b82f6', label: c.title });
+          }
+        }
+      }
+    });
+
+    nodesRef.current = Array.from(nodeMap.values());
+    edgesRef.current = edges;
+  }, [correlations]);
+
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const W = canvas.width, H = canvas.height;
+    const nodes = nodesRef.current;
+    const edges = edgesRef.current;
+
+    // Simple force simulation step
+    const REPULSION = 3000;
+    const SPRING = 0.005;
+    const DAMPING = 0.85;
+    const REST_LEN = 120;
+
+    for (const n of nodes) { n.vx = 0; n.vy = 0; }
+
+    // Repulsion between all node pairs
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const dx = nodes[j].x - nodes[i].x;
+        const dy = nodes[j].y - nodes[i].y;
+        const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+        const force = REPULSION / (dist * dist);
+        const fx = (dx / dist) * force;
+        const fy = (dy / dist) * force;
+        nodes[i].vx -= fx; nodes[i].vy -= fy;
+        nodes[j].vx += fx; nodes[j].vy += fy;
+      }
+    }
+
+    // Spring attraction along edges
+    for (const e of edges) {
+      const a = nodes.find(n => n.id === e.source);
+      const b = nodes.find(n => n.id === e.target);
+      if (!a || !b) continue;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+      const force = SPRING * (dist - REST_LEN);
+      const fx = (dx / dist) * force;
+      const fy = (dy / dist) * force;
+      a.vx += fx; a.vy += fy;
+      b.vx -= fx; b.vy -= fy;
+    }
+
+    // Apply velocity with damping, constrain to bounds
+    for (const n of nodes) {
+      if (dragRef.current.node === n) continue;
+      n.x += n.vx * DAMPING;
+      n.y += n.vy * DAMPING;
+      n.x = Math.max(n.radius + 10, Math.min(W - n.radius - 10, n.x));
+      n.y = Math.max(n.radius + 10, Math.min(H - n.radius - 10, n.y));
+    }
+
+    // Clear and draw
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b1120';
+    ctx.fillRect(0, 0, W, H);
+
+    // Draw edges
+    for (const e of edges) {
+      const a = nodes.find(n => n.id === e.source);
+      const b = nodes.find(n => n.id === e.target);
+      if (!a || !b) continue;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.strokeStyle = e.color + '66';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    // Draw nodes
+    for (const n of nodes) {
+      // Glow
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.radius + 4, 0, Math.PI * 2);
+      ctx.fillStyle = n.color + '22';
+      ctx.fill();
+      // Node
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+      ctx.fillStyle = hoverRef.current === n ? '#fff' : n.color;
+      ctx.fill();
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // Label
+      ctx.fillStyle = '#cbd5e1';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(n.id, n.x, n.y + n.radius + 14);
+    }
+
+    // Tooltip
+    if (hoverRef.current) {
+      const n = hoverRef.current;
+      const relEdges = edges.filter(e => e.source === n.id || e.target === n.id);
+      const tipLines = [`📄 ${n.id}`, ...relEdges.map(e => `↔ ${e.label}`)];
+      const maxW = Math.max(...tipLines.map(l => ctx.measureText(l).width)) + 16;
+      const tipH = tipLines.length * 16 + 12;
+      let tx = n.x + 20, ty = n.y - tipH / 2;
+      if (tx + maxW > W) tx = n.x - maxW - 20;
+      if (ty < 0) ty = 4;
+      ctx.fillStyle = '#1e293bdd';
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(tx, ty, maxW, tipH, 6);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'left';
+      tipLines.forEach((l, i) => ctx.fillText(l, tx + 8, ty + 16 + i * 16));
+    }
+
+    animRef.current = requestAnimationFrame(draw);
+  }, []);
+
+  useEffect(() => {
+    animRef.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(animRef.current);
+  }, [draw]);
+
+  const getNode = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const rect = canvasRef.current!.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    return nodesRef.current.find(n => Math.hypot(n.x - mx, n.y - my) <= n.radius + 4) || null;
+  };
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={700}
+      height={400}
+      style={{ width: '100%', height: 400, borderRadius: 8, border: '1px solid #1e293b', cursor: dragRef.current.node ? 'grabbing' : 'default' }}
+      onMouseDown={(e) => {
+        const n = getNode(e);
+        if (n) {
+          const rect = canvasRef.current!.getBoundingClientRect();
+          dragRef.current = { node: n, offsetX: e.clientX - rect.left - n.x, offsetY: e.clientY - rect.top - n.y };
+        }
+      }}
+      onMouseMove={(e) => {
+        if (dragRef.current.node) {
+          const rect = canvasRef.current!.getBoundingClientRect();
+          dragRef.current.node.x = e.clientX - rect.left - dragRef.current.offsetX;
+          dragRef.current.node.y = e.clientY - rect.top - dragRef.current.offsetY;
+        }
+        hoverRef.current = getNode(e);
+      }}
+      onMouseUp={() => { dragRef.current = { node: null, offsetX: 0, offsetY: 0 }; }}
+      onMouseLeave={() => { dragRef.current = { node: null, offsetX: 0, offsetY: 0 }; hoverRef.current = null; }}
+    />
   );
 }
 
