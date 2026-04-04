@@ -8,11 +8,12 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/ge
 import { buildReviewPrompt } from '../prompts';
 import { Finding, Category, Severity } from '../types/review.types';
 import { v4 as uuidv4 } from 'uuid';
+import { APP_CONFIG } from '../config/app.config';
 
 export class AIReviewService {
   private genAI: GoogleGenerativeAI;
   // Gemini 2.5 Flash has a massive token context window and is the supported version for 2026.
-  private modelName = 'gemini-2.5-flash';
+  private modelName = APP_CONFIG.AI.MODEL_NAME;
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -28,7 +29,7 @@ export class AIReviewService {
   // ============================================================
   async generateEmbedding(text: string): Promise<number[]> {
     try {
-      const embedModel = this.genAI.getGenerativeModel({ model: "gemini-embedding-exp-03-07" });
+      const embedModel = this.genAI.getGenerativeModel({ model: "text-embedding-004" });
       const result = await embedModel.embedContent(text);
       return result.embedding.values;
     } catch (err) {
@@ -64,7 +65,7 @@ export class AIReviewService {
       generationConfig: {
         // Enforce JSON output so we can parse it reliably
         responseMimeType: 'application/json',
-        temperature: 0.2, // Low temperature for more analytical/consistent responses
+        temperature: APP_CONFIG.AI.TEMPERATURE, // Low temperature for more analytical/consistent responses
       },
       safetySettings: [
         {
@@ -176,7 +177,7 @@ Output EXACTLY this JSON structure. Do not use Markdown formatting outside the J
 
     const model = this.genAI.getGenerativeModel({
       model: this.modelName,
-      generationConfig: { responseMimeType: 'application/json', temperature: 0.2 }
+      generationConfig: { responseMimeType: 'application/json', temperature: APP_CONFIG.AI.TEMPERATURE }
     });
 
     try {

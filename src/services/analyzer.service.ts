@@ -11,6 +11,7 @@ import { ReviewResult, Finding } from '../types/review.types';
 import { AnalysisJob } from '../types/analysis.types';
 import { supabase } from './supabase.service';
 import { v4 as uuidv4 } from 'uuid';
+import { APP_CONFIG } from '../config/app.config';
 
 export class AnalyzerService {
   private github: GitHubService;
@@ -145,13 +146,13 @@ export class AnalyzerService {
         }
       } catch { /* No package.json — might be non-JS project */ }
 
-      const filesToReview = files.filter(f => (f.status === 'added' || f.status === 'modified') && !!f.patch);
+      const filesToReview = files.filter(f => (f.status === 'added' || f.status === 'modified') && !!f.patch).slice(0, APP_CONFIG.SYSTEM.MAX_FILES_TO_ANALYZE);
       await this.updateJob(jobId, { total_files: filesToReview.length, status: 'ANALYZING' });
 
       const allFindings: Finding[] = [];
 
       // 2. Ingestion Phase — Embed files into Supabase pgvector (BATCHED)
-      const EMBED_BATCH = 10;
+      const EMBED_BATCH = APP_CONFIG.VECTOR.EMBEDDING_BATCH_SIZE;
       for (let ei = 0; ei < filesToReview.length; ei += EMBED_BATCH) {
         const embedBatch = filesToReview.slice(ei, ei + EMBED_BATCH);
         await Promise.all(embedBatch.map(async (file) => {
@@ -172,7 +173,7 @@ export class AnalyzerService {
 
       // 4. Analyze with RAG context from pgvector
       let processedFiles = 0;
-      const MAX_CONCURRENT = 10;
+      const MAX_CONCURRENT = APP_CONFIG.AI.MAX_CONCURRENT_FILES;
       
       for (let i = 0; i < filesToReview.length; i += MAX_CONCURRENT) {
         const batch = filesToReview.slice(i, i + MAX_CONCURRENT);
@@ -190,8 +191,8 @@ export class AnalyzerService {
             if (currentVecStr) {
               const { data: matches } = await supabase.rpc('match_related_files', {
                 query_embedding: currentVecStr,
-                match_threshold: 0.6,
-                match_count: 2,
+                match_threshold: APP_CONFIG.VECTOR.MATCH_THRESHOLD,
+                match_count: APP_CONFIG.VECTOR.MAX_CONTEXT_FILES,
                 p_job_id: jobId,
               });
               if (matches && matches.length > 0) {
@@ -233,7 +234,8 @@ export class AnalyzerService {
       cloneDir = await this.github.cloneRepository(owner, repo, branch);
 
       // 2. Read Files
-      const filesToReview = await this.github.getLocalFiles(cloneDir);
+      const allLocalFiles = await this.github.getLocalFiles(cloneDir);
+      const filesToReview = allLocalFiles.slice(0, APP_CONFIG.SYSTEM.MAX_FILES_TO_ANALYZE);
       const totalLines = filesToReview.reduce((sum, file) => sum + file.lines, 0);
       await this.updateJob(jobId, { total_files: filesToReview.length });
 
@@ -242,7 +244,7 @@ export class AnalyzerService {
       const packageJsonContent = pkgFile?.content;
 
       // 3. Ingestion Phase — Embed files into Supabase pgvector (BATCHED)
-      const EMBED_BATCH = 10;
+      const EMBED_BATCH = APP_CONFIG.VECTOR.EMBEDDING_BATCH_SIZE;
       for (let ei = 0; ei < filesToReview.length; ei += EMBED_BATCH) {
         const embedBatch = filesToReview.slice(ei, ei + EMBED_BATCH);
         await Promise.all(embedBatch.map(async (file) => {
@@ -267,7 +269,7 @@ export class AnalyzerService {
 
       // 4. Analyze with RAG context from pgvector
       let processedFiles = 0;
-      const MAX_CONCURRENT = 10;
+      const MAX_CONCURRENT = APP_CONFIG.AI.MAX_CONCURRENT_FILES;
 
       for (let i = 0; i < filesToReview.length; i += MAX_CONCURRENT) {
         const batch = filesToReview.slice(i, i + MAX_CONCURRENT);
@@ -285,8 +287,8 @@ export class AnalyzerService {
             if (currentVecStr) {
               const { data: matches } = await supabase.rpc('match_related_files', {
                 query_embedding: currentVecStr,
-                match_threshold: 0.6,
-                match_count: 2,
+                match_threshold: APP_CONFIG.VECTOR.MATCH_THRESHOLD,
+                match_count: APP_CONFIG.VECTOR.MAX_CONTEXT_FILES,
                 p_job_id: jobId,
               });
               if (matches && matches.length > 0) {

@@ -4,6 +4,7 @@ import path from 'path';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../auth/[...nextauth]/route';
 import { Octokit } from '@octokit/rest';
+import { APP_CONFIG } from '../../../config/app.config';
 
 export async function POST(req: Request) {
   try {
@@ -11,6 +12,10 @@ export async function POST(req: Request) {
 
     if (!filePath || !snippet || !replacement) {
       return NextResponse.json({ success: false, error: 'Missing parameters' }, { status: 400 });
+    }
+
+    if (!APP_CONFIG.SYSTEM.ENABLE_LOCAL_FIX_APPLICATION) {
+      return NextResponse.json({ success: false, error: 'Auto-fix is disabled by system administrator configuration.' }, { status: 403 });
     }
 
     // Normalize Windows backslashes to forward slashes for GitHub API

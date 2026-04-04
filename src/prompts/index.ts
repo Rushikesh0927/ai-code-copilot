@@ -106,7 +106,8 @@ export function buildReviewPrompt(
   filepath: string,
   language: string,
   relatedContext?: string,
-  packageJsonContent?: string
+  packageJsonContent?: string,
+  customRules?: string[]
 ): string {
   const ctx = detectProjectContext(packageJsonContent);
 
@@ -130,6 +131,13 @@ ${relatedContext}
 Use this context to check if inputs passed into or out of the Target File are properly sanitized entirely within the system.
   ` : '';
 
+  // Inject custom live rules from APP_CONFIG
+  const customRulesSection = customRules && customRules.length > 0 ? `
+### CUSTOM ORGANIZATION RULES (HIGHEST PRIORITY)
+You must enforce the following custom rules perfectly:
+${customRules.map(rule => `- ${rule}`).join('\n')}
+` : '';
+
   return `
 ${SYSTEM_PROMPT}
 
@@ -145,6 +153,7 @@ ${getAccessibilityPrompt()}
 ${getAPIDesignPrompt()}
 
 ---
+${customRulesSection}
 ${projectSection}
 ${contextSection}
 
