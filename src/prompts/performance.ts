@@ -7,7 +7,7 @@
 import { PERFORMANCE_ANTI_PATTERNS } from '../knowledge';
 
 export function getPerformancePrompt(): string {
-  const perfContext = PERFORMANCE_ANTI_PATTERNS.slice(0, 5).map(perf => `- ${perf.name}: ${perf.description} (Impact: ${perf.impact})`).join('\n');
+  const perfContext = PERFORMANCE_ANTI_PATTERNS.map(perf => `- ${perf.name}: ${perf.description} (Impact: ${perf.impact})`).join('\n');
   
   return `
 ### PERFORMANCE FOCUS

@@ -7,7 +7,7 @@
 import { BUG_PATTERNS } from '../knowledge';
 
 export function getBugDetectionPrompt(): string {
-  const bugContext = BUG_PATTERNS.slice(0, 5).map(bug => `- ${bug.name}: ${bug.description}`).join('\n');
+  const bugContext = BUG_PATTERNS.map(bug => `- ${bug.name}: ${bug.description} (Severity: ${bug.severity})`).join('\n');
   
   return `
 ### BUG DETECTION FOCUS

@@ -56,8 +56,8 @@ export class AIReviewService {
   // SECTION: Review Single File
   // PURPOSE: Ask Gemini to review the code and return structured JSON
   // ============================================================
-  async reviewFile(code: string, filepath: string, language: string, relatedContext?: string): Promise<Finding[]> {
-    const prompt = buildReviewPrompt(code, filepath, language, relatedContext);
+  async reviewFile(code: string, filepath: string, language: string, relatedContext?: string, packageJsonContent?: string): Promise<Finding[]> {
+    const prompt = buildReviewPrompt(code, filepath, language, relatedContext, packageJsonContent);
     
     const model = this.genAI.getGenerativeModel({
       model: this.modelName,

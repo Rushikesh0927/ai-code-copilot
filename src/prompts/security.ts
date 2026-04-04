@@ -8,11 +8,11 @@ import { CWE_TOP_25, OWASP_TOP_10, SECURITY_EXAMPLES } from '../knowledge';
 
 export function getSecurityPrompt(): string {
   // Take top 3 CWEs and OWASP principles for context
-  const cweContext = CWE_TOP_25.slice(0, 3).map(cwe => `- ${cwe.id} (${cwe.name}): ${cwe.description}`).join('\n');
-  const owaspContext = OWASP_TOP_10.slice(0, 3).map(ow => `- ${ow.id} (${ow.name}): ${ow.description}`).join('\n');
+  const cweContext = CWE_TOP_25.map(cwe => `- ${cwe.id} (${cwe.name}): ${cwe.description}`).join('\n');
+  const owaspContext = OWASP_TOP_10.map(ow => `- ${ow.id} (${ow.name}): ${ow.description} | Mitigations: ${ow.mitigations.join('; ')}`).join('\n');
   
   // Take 2 specific few-shot examples
-  const fewShot = SECURITY_EXAMPLES.slice(0, 2).map((ex, i) => `
+  const fewShot = SECURITY_EXAMPLES.map((ex, i) => `
 EXAMPLE ${i+1} (${ex.cwe} - ${ex.title}):
 Vulnerable Code:
 ${ex.vulnerableCode}

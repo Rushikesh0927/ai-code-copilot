@@ -7,7 +7,7 @@
 import { CODE_SMELL_PATTERNS } from '../knowledge';
 
 export function getCodeSmellPrompt(): string {
-  const smellContext = CODE_SMELL_PATTERNS.slice(0, 5).map(smell => `- ${smell.name}: ${smell.description} (Fix: ${smell.refactoring})`).join('\n');
+  const smellContext = CODE_SMELL_PATTERNS.map(smell => `- ${smell.name}: ${smell.description} (Fix: ${smell.refactoring})`).join('\n');
   
   return `
 ### CODE SMELL FOCUS

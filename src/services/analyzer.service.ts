@@ -136,6 +136,15 @@ export class AnalyzerService {
       await this.updateJob(jobId, { status: 'FETCHING' });
       const files = await this.github.getPRFiles(owner, repo, prNumber);
 
+      // Extract package.json for framework/dependency awareness
+      let packageJsonContent: string | undefined;
+      try {
+        const { data: pkgFile } = await (this.github as any).octokit.repos.getContent({ owner, repo, path: 'package.json' });
+        if (pkgFile && !Array.isArray(pkgFile) && pkgFile.type === 'file' && pkgFile.content) {
+          packageJsonContent = Buffer.from(pkgFile.content, 'base64').toString('utf-8');
+        }
+      } catch { /* No package.json — might be non-JS project */ }
+
       const filesToReview = files.filter(f => (f.status === 'added' || f.status === 'modified') && !!f.patch);
       await this.updateJob(jobId, { total_files: filesToReview.length, status: 'ANALYZING' });
 
@@ -191,7 +200,7 @@ export class AnalyzerService {
               }
             }
 
-            return await this.ai.reviewFile(file.patch!, file.filename, 'Detect from extension', relatedContext);
+            return await this.ai.reviewFile(file.patch!, file.filename, 'Detect from extension', relatedContext, packageJsonContent);
           } catch (e) {
             console.error(`Error processing file ${file.filename}:`, e);
             return [];
@@ -227,6 +236,10 @@ export class AnalyzerService {
       const filesToReview = await this.github.getLocalFiles(cloneDir);
       const totalLines = filesToReview.reduce((sum, file) => sum + file.lines, 0);
       await this.updateJob(jobId, { total_files: filesToReview.length });
+
+      // Extract package.json for framework/dependency awareness
+      const pkgFile = filesToReview.find(f => f.path === 'package.json');
+      const packageJsonContent = pkgFile?.content;
 
       // 3. Ingestion Phase — Embed files into Supabase pgvector (BATCHED)
       const EMBED_BATCH = 10;
@@ -282,7 +295,7 @@ export class AnalyzerService {
               }
             }
 
-            return await this.ai.reviewFile(file.content, file.path, file.language, relatedContext);
+            return await this.ai.reviewFile(file.content, file.path, file.language, relatedContext, packageJsonContent);
           } catch (e) {
             console.error(`Error processing file ${file.path}:`, e);
             return [];
