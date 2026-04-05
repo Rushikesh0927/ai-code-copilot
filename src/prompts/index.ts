@@ -107,7 +107,8 @@ export function buildReviewPrompt(
   language: string,
   relatedContext?: string,
   packageJsonContent?: string,
-  customRules?: string[]
+  customRules?: string[],
+  structureMap?: string
 ): string {
   const ctx = detectProjectContext(packageJsonContent);
 
@@ -138,6 +139,13 @@ You must enforce the following custom rules perfectly:
 ${customRules.map(rule => `- ${rule}`).join('\n')}
 ` : '';
 
+  const structureSection = structureMap ? `
+### TARGET FILE FUNCTION STRUCTURE (Spec B12)
+The following function boundaries were extracted from the file AST.
+Use these boundaries to correctly localize scoped issues (like missing 'await' or resource leaks) directly within specific functions.
+${structureMap}
+` : '';
+
   return `
 ${SYSTEM_PROMPT}
 
@@ -156,6 +164,7 @@ ${getAPIDesignPrompt()}
 ${customRulesSection}
 ${projectSection}
 ${contextSection}
+${structureSection}
 
 ### TARGET CODE TO REVIEW
 File: ${filepath}

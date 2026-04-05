@@ -29,8 +29,8 @@ export class AIReviewService {
   // ============================================================
   async generateEmbedding(text: string): Promise<number[]> {
     try {
-      const embedModel = this.genAI.getGenerativeModel({ model: "text-embedding-004" });
-      const result = await embedModel.embedContent(text);
+      const embedModelToUse = this.genAI.getGenerativeModel({ model: "text-embedding-004" });
+      const result = await embedModelToUse.embedContent(text);
       return result.embedding.values;
     } catch (err) {
       console.error("Failed to generate embedding:", err);
@@ -57,8 +57,8 @@ export class AIReviewService {
   // SECTION: Review Single File
   // PURPOSE: Ask Gemini to review the code and return structured JSON
   // ============================================================
-  async reviewFile(code: string, filepath: string, language: string, relatedContext?: string, packageJsonContent?: string): Promise<Finding[]> {
-    const prompt = buildReviewPrompt(code, filepath, language, relatedContext, packageJsonContent);
+  async reviewFile(code: string, filepath: string, language: string, relatedContext?: string, packageJsonContent?: string, structureMap?: string): Promise<Finding[]> {
+    const prompt = buildReviewPrompt(code, filepath, language, relatedContext, packageJsonContent, undefined, structureMap);
     
     const model = this.genAI.getGenerativeModel({
       model: this.modelName,
@@ -77,15 +77,29 @@ export class AIReviewService {
       ]
     });
 
-    try {
-      const result = await model.generateContent(prompt);
-      const responseText = result.response.text();
-      return this.parseAIResponse(responseText, filepath);
-    } catch (error) {
-      console.error(`[AI Review Error for ${filepath}]:`, error);
-      // In a production system, we'd add this to a dead-letter queue or retry
-      return [];
+    let retries = 3;
+    let delayMs = 2000;
+
+    while (retries > 0) {
+      try {
+        const result = await model.generateContent(prompt);
+        const responseText = result.response.text();
+        return this.parseAIResponse(responseText, filepath);
+      } catch (error: any) {
+        retries--;
+        const isRateLimit = error?.status === 429 || error?.status === 503 || error?.message?.includes('503') || error?.message?.includes('429');
+        
+        if (isRateLimit && retries > 0) {
+          console.warn(`[AI Review Capacity for ${filepath}]: 503/429 hit. Retrying in ${delayMs}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          delayMs *= 2; // Exponential backoff
+        } else {
+          console.error(`[AI Review Error for ${filepath}]:`, error);
+          return [];
+        }
+      }
     }
+    return [];
   }
 
   // ============================================================
@@ -122,6 +136,7 @@ export class AIReviewService {
         suggestion: f.suggestion || '',
         impact: f.impact || '',
         codeSnippet: f.codeSnippet || '',
+        fixSnippet: f.fixSnippet || '',
         confidence: f.confidence || 50,
       }));
 

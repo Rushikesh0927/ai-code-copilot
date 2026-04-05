@@ -4,6 +4,9 @@
 // STORAGE: Supabase (Postgres + pgvector) for persistent state & RAG
 // ============================================================
 
+import { parseGitHubUrl } from '../utils/parser';
+import { extractFunctions } from '../utils/ast';
+import { runESLintPrePass } from '../utils/linter';
 import { GitHubService } from './github.service';
 import { AIReviewService } from './ai-review.service';
 import { FormatterService } from './formatter.service';
@@ -297,7 +300,33 @@ export class AnalyzerService {
               }
             }
 
-            return await this.ai.reviewFile(file.content, file.path, file.language, relatedContext, packageJsonContent);
+            // Extract AST Structure (Spec B12)
+            const functions = extractFunctions(file.content, file.language);
+            let structureMap = undefined;
+            if (functions.length > 0) {
+              structureMap = functions.map((f: any) => `- ${f.name} (Lines ${f.startLine}-${f.endLine})`).join('\n');
+            }
+
+            // Statis Pre-Pass (Spec A8/B14)
+            const lintResults = await runESLintPrePass(file.content, file.path);
+            const staticFindings: any[] = lintResults.map((l: any) => ({
+              id: uuidv4(),
+              file: l.file,
+              fn: '',
+              line: l.line,
+              category: 'CODE_SMELLS',
+              severity: l.severity === 2 ? 'HIGH' : 'LOW',
+              title: `ESLint: ${l.ruleId}`,
+              description: l.message,
+              suggestion: 'Fix syntax or logical lint error.',
+              impact: 'May cause runtime errors or degrade code quality.',
+              codeSnippet: file.content.split('\n')[l.line - 1] || '',
+              fixSnippet: l.fixText || '',
+              confidence: 100,
+            }));
+
+            const aiFindings = await this.ai.reviewFile(file.content, file.path, file.language, relatedContext, packageJsonContent, structureMap);
+            return [...staticFindings, ...aiFindings];
           } catch (e) {
             console.error(`Error processing file ${file.path}:`, e);
             return [];
@@ -329,9 +358,11 @@ export class AnalyzerService {
 
     const { correlations, architectureReview } = await this.ai.correlateFindings(findings);
 
-    const durationMs = Date.now() - startTime;
+    const duration_ms = Date.now() - startTime;
     const summary = this.formatter.generateSummary(findings);
     summary.architectureReview = architectureReview;
+    // @ts-ignore
+    summary.durationMs = duration_ms;
 
     // Fetch the user data from the job to persist into the result
     const { data: job } = await supabase.from('jobs').select('user_id, user_name').eq('id', jobId).single();
@@ -347,7 +378,7 @@ export class AnalyzerService {
       correlations,
       summary,
       created_at: new Date().toISOString(),
-      duration_ms: durationMs,
+      duration_ms,
       user_id: job?.user_id || null,
       user_name: job?.user_name || null,
     });

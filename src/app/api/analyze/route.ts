@@ -6,10 +6,7 @@
 
 import { NextResponse } from 'next/server';
 import { parseGitHubUrl, isValidGitHubUrl } from '../../../utils/parser';
-import { AnalyzerService } from '../../../services/analyzer.service';
-
-// We instantiate the service here. In a production DI framework, this would be injected.
-const analyzer = new AnalyzerService();
+import { analyzer } from '../../../services';
 
 export async function POST(req: Request) {
   try {

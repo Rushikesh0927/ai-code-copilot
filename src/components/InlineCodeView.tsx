@@ -11,10 +11,11 @@ import React from 'react';
 interface InlineCodeViewProps {
   codeSnippet?: string;
   suggestion?: string;
+  fixSnippet?: string;
 }
 
-export default function InlineCodeView({ codeSnippet, suggestion }: InlineCodeViewProps) {
-  if (!codeSnippet && !suggestion) return null;
+export default function InlineCodeView({ codeSnippet, suggestion, fixSnippet }: InlineCodeViewProps) {
+  if (!codeSnippet && !suggestion && !fixSnippet) return null;
 
   return (
     <div style={{ marginTop: '16px', borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1px solid var(--border)' }}>
@@ -39,6 +40,15 @@ export default function InlineCodeView({ codeSnippet, suggestion }: InlineCodeVi
 
       {/* SUGGESTION SECTION */}
       {suggestion && (
+        <div style={{ background: '#1a1d24', borderTop: '1px solid var(--border)', padding: '16px' }}>
+          <div style={{ fontSize: '13px', color: '#94a3b8', lineHeight: 1.7 }}>
+            {suggestion}
+          </div>
+        </div>
+      )}
+
+      {/* FIX SNIPPET SECTION */}
+      {fixSnippet && (
         <div style={{ background: '#1e1e1e', borderTop: '1px solid var(--border)' }}>
           <div style={{ 
             background: 'rgba(0, 204, 102, 0.1)', 
@@ -50,9 +60,9 @@ export default function InlineCodeView({ codeSnippet, suggestion }: InlineCodeVi
           }}>
             ✅ Suggested Fix
           </div>
-          <div className="code-font" style={{ padding: '16px', margin: 0, color: '#e2e8f0', whiteSpace: 'pre-wrap' }}>
-            {suggestion}
-          </div>
+          <pre className="code-font" style={{ padding: '16px', margin: 0, overflowX: 'auto', color: '#e2e8f0' }}>
+            <code>{fixSnippet}</code>
+          </pre>
         </div>
       )}
     </div>

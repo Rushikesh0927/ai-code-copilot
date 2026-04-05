@@ -78,7 +78,8 @@ export default function FindingCard({ finding }: FindingCardProps) {
           
           <InlineCodeView 
             codeSnippet={finding.codeSnippet} 
-            suggestion={finding.suggestion} 
+            suggestion={finding.suggestion}
+            fixSnippet={finding.fixSnippet} 
           />
         </div>
       )}

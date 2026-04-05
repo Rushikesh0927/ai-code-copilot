@@ -5,9 +5,7 @@
 // ============================================================
 
 import { NextResponse } from 'next/server';
-import { AnalyzerService } from '../../../services/analyzer.service';
-
-const analyzer = new AnalyzerService();
+import { analyzer } from '../../../services';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);

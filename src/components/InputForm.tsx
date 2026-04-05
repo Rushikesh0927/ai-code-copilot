@@ -11,7 +11,7 @@ import { parseGitHubUrl } from '../utils/parser';
 import { useSession, signIn } from 'next-auth/react';
 
 interface InputFormProps {
-  onSubmit: (url: string) => void;
+  onSubmit: (url: string, customRules?: string[]) => void;
   isLoading: boolean;
 }
 
@@ -19,6 +19,8 @@ export default function InputForm({ onSubmit, isLoading }: InputFormProps) {
   const { data: session, status } = useSession();
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
+  const [customRulesText, setCustomRulesText] = useState('');
+  const [showCustomRules, setShowCustomRules] = useState(false);
   
   const [repos, setRepos] = useState<any[]>([]);
   const [loadingRepos, setLoadingRepos] = useState(false);
@@ -50,8 +52,8 @@ export default function InputForm({ onSubmit, isLoading }: InputFormProps) {
       setError('Invalid GitHub URL. Must be a repository or Pull Request URL.');
       return;
     }
-
-    onSubmit(url.trim());
+    const customRules = customRulesText.split('\n').map(r => r.trim()).filter(Boolean);
+    onSubmit(url.trim(), customRules.length > 0 ? customRules : undefined);
   };
 
   return (
@@ -112,6 +114,36 @@ export default function InputForm({ onSubmit, isLoading }: InputFormProps) {
           {isLoading ? 'Analyzing...' : 'Start Review'}
         </button>
       </form>
+
+      {/* Custom Rules Toggle */}
+      <div style={{ marginTop: 16 }}>
+        <button
+          type="button"
+          onClick={() => setShowCustomRules(!showCustomRules)}
+          style={{
+            background: 'none', border: 'none', color: '#64748b', fontSize: 12,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, padding: 0,
+          }}
+        >
+          <span style={{ transition: 'transform .2s', transform: showCustomRules ? 'rotate(90deg)' : 'none' }}>▶</span>
+          ⚙️ Custom Review Rules {customRulesText.split('\n').filter(Boolean).length > 0 && `(${customRulesText.split('\n').filter(Boolean).length})`}
+        </button>
+        {showCustomRules && (
+          <textarea
+            value={customRulesText}
+            onChange={e => setCustomRulesText(e.target.value)}
+            placeholder={`Enter custom rules (one per line):\nNever use console.log in production code\nAll API routes must validate input with Zod\nNo inline styles — use CSS modules`}
+            rows={4}
+            style={{
+              width: '100%', marginTop: 8, padding: '10px 14px',
+              background: 'rgba(30,41,59,0.8)', border: '1px solid #334155',
+              borderRadius: 8, color: '#e2e8f0', fontSize: 12,
+              fontFamily: 'monospace', resize: 'vertical', outline: 'none',
+              lineHeight: 1.6,
+            }}
+          />
+        )}
+      </div>
 
       {error && (
         <div style={{ color: '#ff4444', marginTop: '12px', fontSize: '14px' }}>

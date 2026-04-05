@@ -26,7 +26,7 @@ export interface Finding {
   id: string;
   file: string;
   fn?: string;          // Extracted function or class name (Spec 3.3)
-  line?: number;
+  line: number;
   endLine?: number;
   category: Category;
   severity: Severity;
@@ -34,8 +34,8 @@ export interface Finding {
   description: string;
   suggestion: string;
   impact?: string;      // Impact of applying suggestion (Spec 3.8)
-  codeSnippet?: string;
-  fixSnippet?: string;
+  codeSnippet: string;
+  fixSnippet: string;
   cweId?: string;        // e.g. "CWE-89"
   owaspCategory?: string; // e.g. "A03:2021 Injection"
   confidence: number;    // 0-100

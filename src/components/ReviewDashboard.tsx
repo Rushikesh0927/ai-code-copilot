@@ -41,6 +41,13 @@ export default function ReviewDashboard({ result }: Props) {
   const [fixedSet, setFixedSet] = useState<Set<string>>(new Set());
   const [showAuthModal, setShowAuthModal] = useState(false);
 
+  // --- Copilot Chat State ---
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState<{role: 'user'|'ai'; text: string}[]>([]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
   // --- Computed data ---
   const sevCounts = useMemo(() => {
     const c: Record<string, number> = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFORMATIONAL: 0 };
@@ -85,9 +92,27 @@ export default function ReviewDashboard({ result }: Props) {
   const total = result.findings.length || 1;
   const score = result.summary.overallScore;
   const scoreColor = score > 75 ? '#86efac' : score > 50 ? '#fbbf24' : '#ff6b6b';
-  const riskLabel = score > 75 ? 'Low risk' : score > 50 ? 'Medium risk' : score > 25 ? 'Medium-High risk' : 'High risk';
+  const qualityLabel = score > 75 ? 'Excellent Health' : score > 50 ? 'Moderate Issues' : score > 25 ? 'Needs Rework' : 'Critical Risk';
 
-  const hotspots = Object.entries(fileCounts).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  const fileRisk = useMemo(() => {
+    const map: Record<string, Record<string, number>> = {};
+    result.findings.forEach(f => {
+      map[f.file] = map[f.file] || { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFORMATIONAL: 0 };
+      map[f.file][f.severity] = (map[f.file][f.severity] || 0) + 1;
+    });
+    return Object.entries(map)
+      .map(([file, counts]) => ({
+        file,
+        CRITICAL: counts.CRITICAL || 0,
+        HIGH: counts.HIGH || 0,
+        MEDIUM: counts.MEDIUM || 0,
+        LOW: counts.LOW || 0,
+        INFORMATIONAL: counts.INFORMATIONAL || 0,
+        total: Object.values(counts).reduce((a, b) => a + b, 0)
+      }))
+      .sort((a, b) => (b.CRITICAL - a.CRITICAL) || (b.HIGH - a.HIGH) || (b.total - a.total))
+      .slice(0, 10);
+  }, [result.findings]);
   const maxCat = Math.max(...Object.values(catCounts), 1);
   const maxFile = Math.max(...Object.values(fileCounts), 1);
 
@@ -153,6 +178,9 @@ export default function ReviewDashboard({ result }: Props) {
       URL.revokeObjectURL(url);
     });
   };
+  const handleExportPdf = () => {
+    window.print();
+  };
 
   return (
     <div style={styles.page}>
@@ -176,9 +204,10 @@ export default function ReviewDashboard({ result }: Props) {
         ))}
 
         {/* Export Buttons */}
-        <div style={{ marginTop: 'auto', padding: '12px 16px', borderTop: '1px solid #334155', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ marginTop: 'auto', padding: '12px 16px', borderTop: '1px solid #334155', display: 'flex', flexDirection: 'column', gap: 6 }} className="export-buttons">
           <button onClick={handleExportJson} style={styles.exportBtn}>📥 Export JSON</button>
           <button onClick={handleExportHtml} style={{ ...styles.exportBtn, borderColor: '#10b981', color: '#10b981' }}>📄 Export HTML</button>
+          <button onClick={handleExportPdf} style={{ ...styles.exportBtn, borderColor: '#fbbf24', color: '#fbbf24' }}>🖨️ Export PDF</button>
         </div>
       </div>
 
@@ -196,6 +225,8 @@ export default function ReviewDashboard({ result }: Props) {
             <div style={styles.summaryGrid}>
               <StatCard label="Total files analyzed" value={result.totalFiles} />
               <StatCard label="Total lines of code" value={result.totalLines} />
+              {/* @ts-ignore */}
+              <StatCard label="Analysis Time" value={result.summary?.durationMs ? (result.summary.durationMs / 1000).toFixed(1) + 's' : 'N/A'} />
               <StatCard label="Languages detected" value={languagesBreakdown.length} />
               <StatCard label="Total issues found" value={result.findings.length} valueColor="#ff6b6b" />
             </div>
@@ -215,7 +246,7 @@ export default function ReviewDashboard({ result }: Props) {
                 <div style={{ fontSize: 28, fontWeight: 600, color: scoreColor, minWidth: 48 }}>{score}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>
-                    Overall repository risk score &nbsp;&middot;&nbsp; <span style={{ color: scoreColor }}>{riskLabel}</span>
+                    Overall code quality score &nbsp;&middot;&nbsp; <span style={{ color: scoreColor }}>{qualityLabel}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 3, height: 8, borderRadius: 4, overflow: 'hidden', marginBottom: 6 }}>
                     <div style={{ background: '#E24B4A', width: `${Math.round((sevCounts.CRITICAL / total) * 100)}%`, height: '100%' }} />
@@ -235,13 +266,37 @@ export default function ReviewDashboard({ result }: Props) {
               </div>
             </div>
 
-            {/* Risk Hotspots */}
-            {hotspots.length > 0 && (
-              <div style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.7, marginBottom: 20 }}>
-                <strong style={{ color: '#e2e8f0' }}>Risk hotspots:</strong>&nbsp;&nbsp;
-                {hotspots.map(([f]) => (
-                  <code key={f} style={{ fontFamily: 'monospace', fontSize: 12, background: '#1e293b', padding: '1px 6px', borderRadius: 4, marginRight: 8 }}>{f}</code>
-                ))}
+            {/* Score Breakdown Explanation */}
+            <div style={{ marginTop: 16, marginBottom: 32, padding: '12px 16px', background: '#0f172a', borderRadius: 8, border: '1px solid #1e293b' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Scoring Formula Breakdown</div>
+              <div style={{ fontSize: 13, fontFamily: 'monospace', color: '#cbd5e1', lineHeight: 1.6 }}>
+                <div>Score = 100 - (Critical×15 + High×8 + Medium×4 + Low×1)</div>
+                <div>Penalty = ({sevCounts.CRITICAL}×15 + {sevCounts.HIGH}×8 + {sevCounts.MEDIUM}×4 + {sevCounts.LOW}×1)</div>
+                <div>Final = <strong style={{ color: scoreColor }}>{score}/100</strong></div>
+              </div>
+            </div>
+
+            {/* Risk Hotspots Heatmap */}
+            {fileRisk.length > 0 && (
+              <div style={{ marginBottom: 32 }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: '#e2e8f0', marginBottom: 12 }}>🔥 Risk Hotspots Heatmap</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {fileRisk.map(fr => (
+                    <div key={fr.file} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }} onClick={() => { setSevFilter('ALL'); setCatFilter('ALL'); setSection('findings'); }}>
+                      <div style={{ fontSize: 12, color: '#cbd5e1', width: 200, flexShrink: 0, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {fr.file.split('/').pop() || fr.file}
+                      </div>
+                      <div style={{ flex: 1, display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', background: '#1e293b' }}>
+                        <div style={{ background: '#E24B4A', width: `${(fr.CRITICAL / fr.total) * 100}%` }} />
+                        <div style={{ background: '#BA7517', width: `${(fr.HIGH / fr.total) * 100}%` }} />
+                        <div style={{ background: '#185FA5', width: `${(fr.MEDIUM / fr.total) * 100}%` }} />
+                        <div style={{ background: '#3B6D11', width: `${(fr.LOW / fr.total) * 100}%` }} />
+                        <div style={{ background: '#534AB7', width: `${(fr.INFORMATIONAL / fr.total) * 100}%` }} />
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 500, color: '#94a3b8', width: 24, textAlign: 'right' }}>{fr.total}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -355,7 +410,7 @@ export default function ReviewDashboard({ result }: Props) {
                             <CodeBlock code={f.codeSnippet} startLine={f.line} />
                           </FbSection>
                         )}
-                        {f.suggestion && (
+                        {(f.suggestion || f.fixSnippet) && (
                           <div style={{ position: 'relative' }}>
                             <FbSection label="SUGGESTED IMPROVEMENT">
                                <div style={{ position: 'absolute', top: -5, right: 0, display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -376,7 +431,14 @@ export default function ReviewDashboard({ result }: Props) {
                                    </>
                                  )}
                                </div>
-                              <CodeBlock code={f.suggestion} startLine={f.line} isFix />
+                              {f.suggestion && (
+                                <div style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.7, marginBottom: f.fixSnippet ? 12 : 0 }}>
+                                  {f.suggestion}
+                                </div>
+                              )}
+                              {f.fixSnippet && (
+                                <CodeBlock code={f.fixSnippet} startLine={f.line} isFix />
+                              )}
                             </FbSection>
                           </div>
                         )}
@@ -421,9 +483,29 @@ export default function ReviewDashboard({ result }: Props) {
                       {c.issues.map(iss => <span key={iss} style={styles.corrChip}>#{iss}</span>)}
                     </div>
                     <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Affected components:</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12 }}>
                       {c.files.map(f => <span key={f} style={styles.fileChip}>{f}</span>)}
                     </div>
+                    {/* Render exact member findings */}
+                    {c.issues && c.issues.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8, paddingLeft: 12, borderLeft: '2px solid #334155' }}>
+                        {c.issues.map(iss => {
+                          const memberFinding = result.findings.find(x => x.id === iss);
+                          if (!memberFinding) return null;
+                          return (
+                            <div key={iss} style={{ background: '#0b1120', padding: '10px 14px', borderRadius: 6, border: '1px solid #1e293b' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                <span style={{ ...styles.badge, background: SEV_COLORS[memberFinding.severity]?.bg, color: SEV_COLORS[memberFinding.severity]?.text, padding: '2px 6px', fontSize: 10 }}>{memberFinding.severity}</span>
+                                <span style={{ fontSize: 13, fontWeight: 500, color: '#e2e8f0' }}>{memberFinding.title}</span>
+                              </div>
+                              <div style={{ fontSize: 11, fontFamily: 'monospace', color: '#94a3b8' }}>
+                                {memberFinding.file} : L{memberFinding.line}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 ))}
               </>
@@ -449,6 +531,143 @@ export default function ReviewDashboard({ result }: Props) {
            </div>
         </div>
       )}
+      {/* ===== AI COPILOT CHAT PANEL ===== */}
+      <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 1100 }} className="copilot-chat">
+        {!chatOpen ? (
+          <button
+            onClick={() => setChatOpen(true)}
+            style={{
+              width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #3b82f6)',
+              border: 'none', color: '#fff', fontSize: 24, cursor: 'pointer',
+              boxShadow: '0 8px 32px rgba(99,102,241,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'transform 0.2s',
+            }}
+            onMouseOver={e => (e.currentTarget.style.transform = 'scale(1.1)')}
+            onMouseOut={e => (e.currentTarget.style.transform = 'scale(1)')}
+          >
+            🤖
+          </button>
+        ) : (
+          <div style={{
+            width: 420, height: 520, background: '#0f172a', border: '1px solid #334155',
+            borderRadius: 16, display: 'flex', flexDirection: 'column',
+            boxShadow: '0 24px 48px rgba(0,0,0,0.5)', overflow: 'hidden',
+          }}>
+            {/* Chat Header */}
+            <div style={{
+              padding: '14px 18px', borderBottom: '1px solid #1e293b',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'linear-gradient(135deg, #1e1b4b, #0f172a)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 20 }}>🤖</span>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0' }}>AI Copilot</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>Ask about findings</div>
+                </div>
+              </div>
+              <button onClick={() => setChatOpen(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 18, cursor: 'pointer' }}>✕</button>
+            </div>
+
+            {/* Chat Messages */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {chatMessages.length === 0 && (
+                <div style={{ textAlign: 'center', color: '#64748b', fontSize: 13, marginTop: 40 }}>
+                  <div style={{ fontSize: 32, marginBottom: 12 }}>💬</div>
+                  <div>Ask me anything about this review!</div>
+                  <div style={{ fontSize: 11, marginTop: 8, color: '#475569' }}>e.g. "Which file should I fix first?" or "Explain the JWT issue"</div>
+                </div>
+              )}
+              {chatMessages.map((msg, i) => (
+                <div key={i} style={{
+                  alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                  maxWidth: '85%',
+                  padding: '10px 14px',
+                  borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                  background: msg.role === 'user' ? '#3b82f6' : '#1e293b',
+                  color: msg.role === 'user' ? '#fff' : '#cbd5e1',
+                  fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap',
+                }}>
+                  {msg.text}
+                </div>
+              ))}
+              {chatLoading && (
+                <div style={{ alignSelf: 'flex-start', padding: '10px 14px', borderRadius: '14px 14px 14px 4px', background: '#1e293b', color: '#64748b', fontSize: 13 }}>
+                  <span style={{ animation: 'pulse 1.5s infinite' }}>Thinking...</span>
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Chat Input */}
+            <div style={{ padding: '12px 16px', borderTop: '1px solid #1e293b', display: 'flex', gap: 8 }}>
+              <input
+                type="text"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={async e => {
+                  if (e.key === 'Enter' && chatInput.trim() && !chatLoading) {
+                    const q = chatInput.trim();
+                    setChatInput('');
+                    setChatMessages(prev => [...prev, { role: 'user', text: q }]);
+                    setChatLoading(true);
+                    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+                    try {
+                      const res = await fetch('/api/copilot', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ question: q, reviewId: result.id }),
+                      });
+                      const data = await res.json();
+                      setChatMessages(prev => [...prev, { role: 'ai', text: data.answer || data.error || 'No response.' }]);
+                    } catch {
+                      setChatMessages(prev => [...prev, { role: 'ai', text: 'Connection error. Please try again.' }]);
+                    } finally {
+                      setChatLoading(false);
+                      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+                    }
+                  }
+                }}
+                placeholder="Ask about this review..."
+                style={{
+                  flex: 1, padding: '10px 14px', background: '#1e293b', border: '1px solid #334155',
+                  borderRadius: 10, color: '#e2e8f0', fontSize: 13, outline: 'none',
+                }}
+              />
+              <button
+                disabled={!chatInput.trim() || chatLoading}
+                onClick={async () => {
+                  if (!chatInput.trim() || chatLoading) return;
+                  const q = chatInput.trim();
+                  setChatInput('');
+                  setChatMessages(prev => [...prev, { role: 'user', text: q }]);
+                  setChatLoading(true);
+                  setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+                  try {
+                    const res = await fetch('/api/copilot', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ question: q, reviewId: result.id }),
+                    });
+                    const data = await res.json();
+                    setChatMessages(prev => [...prev, { role: 'ai', text: data.answer || data.error || 'No response.' }]);
+                  } catch {
+                    setChatMessages(prev => [...prev, { role: 'ai', text: 'Connection error. Please try again.' }]);
+                  } finally {
+                    setChatLoading(false);
+                    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+                  }
+                }}
+                style={{
+                  padding: '10px 16px', background: chatInput.trim() ? '#3b82f6' : '#334155',
+                  border: 'none', borderRadius: 10, color: '#fff', fontSize: 14,
+                  cursor: chatInput.trim() ? 'pointer' : 'not-allowed', fontWeight: 600,
+                }}
+              >↑</button>
+            </div>
+          </div>
+        )}
+      </div>
 
     </div>
   );

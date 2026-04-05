@@ -165,3 +165,40 @@ h1, h2, h3, h4 {
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+/* ============================================================ */
+/* Print Styles (Spec §6 — PDF Export) */
+/* ============================================================ */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+    background-image: none !important;
+  }
+  
+  /* Hide interactive/extraneous elements */
+  nav, header, button, .export-buttons, .copilot-chat, [disabled] {
+    display: none !important;
+  }
+
+  /* Make panels clean and border-only */
+  .glass-panel, .glass-card, [style*="background: #1e293b"] {
+    background: transparent !important;
+    border: 1px solid #ccc !important;
+    box-shadow: none !important;
+    color: black !important;
+    page-break-inside: avoid;
+  }
+
+  /* Expand all collapsibles implicitly or at least avoid breaking them mid-page */
+  pre {
+    border: 1px solid #eee;
+    page-break-inside: avoid;
+    white-space: pre-wrap !important;
+  }
+
+  h1, h2, h3, h4, div {
+    color: black !important;
+    text-shadow: none !important;
+  }
+}

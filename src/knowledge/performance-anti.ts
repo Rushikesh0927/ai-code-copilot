@@ -79,4 +79,19 @@ export const PERFORMANCE_ANTI_PATTERNS: PerformancePattern[] = [
     impact: 'Total time = sum of all calls. Should be max of all calls.',
     fix: 'Use Promise.all([...]) to run independent async operations in parallel',
   },
+  {
+    id: 'PERF-008',
+    name: 'N+1 Query with MongoDB Loop Fetch',
+    description: 'Fetching related documents one-by-one in a loop instead of using populate() or aggregation pipeline',
+    detectHints: ['for', 'forEach', 'map', 'findById', 'findOne', 'await Model.find'],
+    severity: 'HIGH',
+    impact: 'With N applications and M tasks: produces N+1 queries. Collapses under load.',
+    fix: `Bad:
+  const apps = await Application.find({});
+  for (let app of apps) {
+    app.task = await Task.findById(app.taskId); // N extra queries!
+  }
+Good:
+  const apps = await Application.find({}).populate('taskId', 'title budget');`,
+  },
 ];

@@ -80,6 +80,7 @@ export function generateHtmlReport(result: ReviewResult): string {
     desc: f.description,
     code: f.codeSnippet || '',
     suggestion: f.suggestion || '',
+    fixSnippet: f.fixSnippet || '',
     impact: f.impact || '',
     corr: f.relatedIssues || [],
   })));
@@ -449,7 +450,8 @@ function renderFindings(){
         '</div>' +
         '<div class="fb-section"><div class="fb-label">DESCRIPTION</div><div class="fb-text">'+f.desc+'</div></div>' +
         (f.code ? '<div class="fb-section"><div class="fb-label">AFFECTED CODE</div><div class="code-block">'+h(f.code)+'</div></div>' : '') +
-        (f.suggestion ? '<div class="fb-section"><div class="fb-label">SUGGESTED IMPROVEMENT</div><div class="suggest-block">'+h(f.suggestion)+'</div></div>' : '') +
+        (f.suggestion ? '<div class="fb-section"><div class="fb-label">SUGGESTED IMPROVEMENT</div><div class="fb-text">'+h(f.suggestion)+'</div></div>' : '') +
+        (f.fixSnippet ? '<div class="fb-section"><div class="fb-label">CODE FIX</div><div class="suggest-block">'+h(f.fixSnippet)+'</div></div>' : '') +
         (f.impact ? '<div class="fb-section"><div class="fb-label">IMPACT</div><div class="fb-text">'+f.impact+'</div></div>' : '') +
         (f.corr&&f.corr.length ? '<div class="fb-section"><div class="fb-label">RELATED ISSUES</div><div>'+f.corr.map(function(c){return '<span class="corr-chip" onclick="jumpTo(\\''+c+'\\')">\\u0023 '+c+'</span>';}).join('')+'</div></div>' : '') +
       '</div>' +
