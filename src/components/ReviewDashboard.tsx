@@ -745,276 +745,136 @@ interface GNode { id: string; x: number; y: number; vx: number; vy: number; radi
 interface GEdge { source: string; target: string; color: string; label: string; }
 
 function DependencyGraph({ correlations }: { correlations: Correlation[] }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const nodesRef = useRef<GNode[]>([]);
-  const edgesRef = useRef<GEdge[]>([]);
-  const dragRef = useRef<{ node: GNode | null; offsetX: number; offsetY: number }>({ node: null, offsetX: 0, offsetY: 0 });
-  const hoverRef = useRef<GNode | null>(null);
-  const animRef = useRef<number>(0);
+  const [hovered, setHovered] = React.useState<number | null>(null);
 
-  const CW = 1200, CH = 600; // Canvas logical size
+  if (!correlations || correlations.length === 0) return null;
 
-  // Build graph data from correlations — circular initial layout
-  useEffect(() => {
-    const nodeMap = new Map<string, GNode>();
-    const edgeSet = new Set<string>(); // deduplicate edges
-    const edges: GEdge[] = [];
-
-    correlations.forEach(c => {
-      const files = c.files || [];
-      files.forEach(f => {
-        const short = f.split('/').pop() || f;
-        if (!nodeMap.has(short)) {
-          nodeMap.set(short, {
-            id: short, x: 0, y: 0, vx: 0, vy: 0, radius: 5, color: '#3b82f6'
-          });
-        }
-        const n = nodeMap.get(short)!;
-        n.radius = Math.min(16, n.radius + 1.5);
-        // Use highest severity color
-        const sevOrder = ['INFORMATIONAL', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
-        const curIdx = sevOrder.indexOf(Object.entries(EDGE_COLORS).find(([, v]) => v === n.color)?.[0] || '');
-        const newIdx = sevOrder.indexOf(c.severity);
-        if (newIdx > curIdx) n.color = EDGE_COLORS[c.severity] || '#3b82f6';
-      });
-      // Deduplicated edges
-      for (let i = 0; i < files.length; i++) {
-        for (let j = i + 1; j < files.length; j++) {
-          const a = files[i].split('/').pop() || files[i];
-          const b = files[j].split('/').pop() || files[j];
-          const key = [a, b].sort().join('|');
-          if (a !== b && !edgeSet.has(key)) {
-            edgeSet.add(key);
-            edges.push({ source: a, target: b, color: EDGE_COLORS[c.severity] || '#3b82f6', label: c.title });
-          }
-        }
-      }
-    });
-
-    // Circular initial layout — prevents random clustering
-    const allNodes = Array.from(nodeMap.values());
-    const cx = CW / 2, cy = CH / 2;
-    const radius = Math.min(CW, CH) * 0.38;
-    allNodes.forEach((n, i) => {
-      const angle = (2 * Math.PI * i) / allNodes.length;
-      n.x = cx + radius * Math.cos(angle);
-      n.y = cy + radius * Math.sin(angle);
-    });
-
-    nodesRef.current = allNodes;
-    edgesRef.current = edges;
-  }, [correlations]);
-
-  const draw = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const nodes = nodesRef.current;
-    const edges = edgesRef.current;
-    if (nodes.length === 0) return;
-
-    // Force simulation
-    const REPULSION = 12000;
-    const SPRING = 0.003;
-    const DAMPING = 0.82;
-    const REST_LEN = 200;
-    const CENTER_PULL = 0.001;
-
-    for (const n of nodes) { n.vx = 0; n.vy = 0; }
-
-    // Repulsion between all node pairs
-    for (let i = 0; i < nodes.length; i++) {
-      for (let j = i + 1; j < nodes.length; j++) {
-        const dx = nodes[j].x - nodes[i].x;
-        const dy = nodes[j].y - nodes[i].y;
-        const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
-        const force = REPULSION / (dist * dist);
-        const fx = (dx / dist) * force;
-        const fy = (dy / dist) * force;
-        nodes[i].vx -= fx; nodes[i].vy -= fy;
-        nodes[j].vx += fx; nodes[j].vy += fy;
-      }
-    }
-
-    // Spring attraction along edges
-    for (const e of edges) {
-      const a = nodes.find(n => n.id === e.source);
-      const b = nodes.find(n => n.id === e.target);
-      if (!a || !b) continue;
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
-      const force = SPRING * (dist - REST_LEN);
-      const fx = (dx / dist) * force;
-      const fy = (dy / dist) * force;
-      a.vx += fx; a.vy += fy;
-      b.vx -= fx; b.vy -= fy;
-    }
-
-    // Gentle center gravity to prevent drifting off
-    for (const n of nodes) {
-      n.vx += (CW / 2 - n.x) * CENTER_PULL;
-      n.vy += (CH / 2 - n.y) * CENTER_PULL;
-    }
-
-    // Apply velocity, constrain to bounds
-    for (const n of nodes) {
-      if (dragRef.current.node === n) continue;
-      n.x += n.vx * DAMPING;
-      n.y += n.vy * DAMPING;
-      n.x = Math.max(60, Math.min(CW - 60, n.x));
-      n.y = Math.max(40, Math.min(CH - 40, n.y));
-    }
-
-    // Clear
-    ctx.clearRect(0, 0, CW, CH);
-    ctx.fillStyle = '#0b1120';
-    ctx.fillRect(0, 0, CW, CH);
-
-    // Draw edges
-    for (const e of edges) {
-      const a = nodes.find(n => n.id === e.source);
-      const b = nodes.find(n => n.id === e.target);
-      if (!a || !b) continue;
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.strokeStyle = e.color + '44';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
-
-    // Draw nodes
-    const hoveredNode = hoverRef.current;
-    for (const n of nodes) {
-      const isHovered = hoveredNode === n;
-      const isConnected = hoveredNode && edges.some(e => 
-        (e.source === hoveredNode.id && e.target === n.id) || (e.target === hoveredNode.id && e.source === n.id)
-      );
-      const dimmed = hoveredNode && !isHovered && !isConnected;
-      
-      // Glow for hovered/connected nodes
-      if (isHovered || isConnected) {
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, n.radius + 6, 0, Math.PI * 2);
-        ctx.fillStyle = n.color + '33';
-        ctx.fill();
-      }
-      // Node circle
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
-      ctx.fillStyle = dimmed ? (n.color + '44') : (isHovered ? '#fff' : n.color);
-      ctx.fill();
-      ctx.strokeStyle = dimmed ? '#1e293b44' : '#1e293b';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-
-      // Label — always show but dim non-hovered
-      ctx.fillStyle = dimmed ? '#64748b44' : (isHovered || isConnected ? '#f1f5f9' : '#94a3b8');
-      ctx.font = isHovered ? 'bold 11px monospace' : '9px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(n.id, n.x, n.y + n.radius + 13);
-    }
-
-    // Highlight edges connected to hovered node
-    if (hoveredNode) {
-      for (const e of edges) {
-        if (e.source !== hoveredNode.id && e.target !== hoveredNode.id) continue;
-        const a = nodes.find(n => n.id === e.source);
-        const b = nodes.find(n => n.id === e.target);
-        if (!a || !b) continue;
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.strokeStyle = e.color + 'cc';
-        ctx.lineWidth = 2.5;
-        ctx.stroke();
-      }
-    }
-
-    // Tooltip on hover
-    if (hoveredNode) {
-      const n = hoveredNode;
-      const relEdges = edges.filter(e => e.source === n.id || e.target === n.id);
-      const connections = relEdges.map(e => e.source === n.id ? e.target : e.source);
-      const uniqueConns = [...new Set(connections)];
-      const tipLines = [
-        `📄 ${n.id}`,
-        `🔗 ${uniqueConns.length} connection${uniqueConns.length !== 1 ? 's' : ''}`,
-        ...relEdges.slice(0, 4).map(e => `  ↔ ${e.label.substring(0, 40)}`)
-      ];
-      if (relEdges.length > 4) tipLines.push(`  ... +${relEdges.length - 4} more`);
-      
-      ctx.font = '11px monospace';
-      const maxW = Math.max(...tipLines.map(l => ctx.measureText(l).width)) + 20;
-      const tipH = tipLines.length * 16 + 14;
-      let tx = n.x + 20, ty = n.y - tipH / 2;
-      if (tx + maxW > CW) tx = n.x - maxW - 20;
-      if (ty < 4) ty = 4;
-      if (ty + tipH > CH - 4) ty = CH - tipH - 4;
-
-      ctx.fillStyle = '#0f172aee';
-      ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.roundRect(tx, ty, maxW, tipH, 6);
-      ctx.fill(); ctx.stroke();
-      ctx.fillStyle = '#e2e8f0';
-      ctx.textAlign = 'left';
-      tipLines.forEach((l, i) => ctx.fillText(l, tx + 10, ty + 17 + i * 16));
-    }
-
-    animRef.current = requestAnimationFrame(draw);
-  }, []);
-
-  useEffect(() => {
-    animRef.current = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(animRef.current);
-  }, [draw]);
-
-  // Scale mouse coords from CSS size to canvas logical size
-  const getNode = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current!;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = CW / rect.width;
-    const scaleY = CH / rect.height;
-    const mx = (e.clientX - rect.left) * scaleX;
-    const my = (e.clientY - rect.top) * scaleY;
-    return nodesRef.current.find(n => Math.hypot(n.x - mx, n.y - my) <= n.radius + 6) || null;
+  const SEV_STYLE: Record<string, { bg: string; border: string; text: string; glow: string }> = {
+    CRITICAL: { bg: '#1a0a0a', border: '#ef4444', text: '#ef4444', glow: '#ef444433' },
+    HIGH:     { bg: '#1a1000', border: '#f97316', text: '#f97316', glow: '#f9731633' },
+    MEDIUM:   { bg: '#0a0e1a', border: '#f59e0b', text: '#f59e0b', glow: '#f59e0b33' },
+    LOW:      { bg: '#0a1a0e', border: '#22c55e', text: '#22c55e', glow: '#22c55e33' },
+    INFORMATIONAL: { bg: '#0a0f1a', border: '#3b82f6', text: '#3b82f6', glow: '#3b82f633' },
   };
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={CW}
-      height={CH}
-      style={{ width: '100%', height: 480, borderRadius: 8, border: '1px solid #1e293b', cursor: 'default', background: '#0b1120' }}
-      onMouseDown={(e) => {
-        const n = getNode(e);
-        if (n) {
-          const canvas = canvasRef.current!;
-          const rect = canvas.getBoundingClientRect();
-          const scaleX = CW / rect.width;
-          const scaleY = CH / rect.height;
-          dragRef.current = { node: n, offsetX: (e.clientX - rect.left) * scaleX - n.x, offsetY: (e.clientY - rect.top) * scaleY - n.y };
-        }
-      }}
-      onMouseMove={(e) => {
-        if (dragRef.current.node) {
-          const canvas = canvasRef.current!;
-          const rect = canvas.getBoundingClientRect();
-          const scaleX = CW / rect.width;
-          const scaleY = CH / rect.height;
-          dragRef.current.node.x = (e.clientX - rect.left) * scaleX - dragRef.current.offsetX;
-          dragRef.current.node.y = (e.clientY - rect.top) * scaleY - dragRef.current.offsetY;
-        }
-        hoverRef.current = getNode(e);
-      }}
-      onMouseUp={() => { dragRef.current = { node: null, offsetX: 0, offsetY: 0 }; }}
-      onMouseLeave={() => { dragRef.current = { node: null, offsetX: 0, offsetY: 0 }; hoverRef.current = null; }}
-    />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Legend */}
+      <div style={{ display: 'flex', gap: 16, padding: '8px 0', flexWrap: 'wrap' }}>
+        {Object.entries(SEV_STYLE).map(([sev, s]) => (
+          <div key={sev} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: s.text }}>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: s.border }} />
+            {sev}
+          </div>
+        ))}
+        <div style={{ marginLeft: 'auto', fontSize: 11, color: '#475569' }}>
+          {correlations.length} correlation cluster{correlations.length !== 1 ? 's' : ''} detected
+        </div>
+      </div>
+
+      {/* Cluster Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 14 }}>
+        {correlations.map((c, i) => {
+          const sev = c.severity || 'LOW';
+          const style = SEV_STYLE[sev] || SEV_STYLE.LOW;
+          const isHov = hovered === i;
+          const files = (c.files || []).slice(0, 8);
+          const extraFiles = (c.files || []).length - 8;
+
+          return (
+            <div
+              key={c.id || i}
+              onMouseEnter={() => setHovered(i)}
+              onMouseLeave={() => setHovered(null)}
+              style={{
+                background: style.bg,
+                border: `1.5px solid ${isHov ? style.border : style.border + '66'}`,
+                borderRadius: 12,
+                padding: '14px 16px',
+                transition: 'all 0.2s',
+                boxShadow: isHov ? `0 0 24px ${style.glow}` : 'none',
+                cursor: 'default',
+              }}
+            >
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: 8,
+                  background: style.border + '22', border: `1px solid ${style.border}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 12, fontWeight: 700, color: style.text, flexShrink: 0
+                }}>
+                  {String(i + 1).padStart(2, '0')}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0', lineHeight: 1.3 }}>
+                    {c.title}
+                  </div>
+                  <div style={{
+                    display: 'inline-block', marginTop: 3,
+                    fontSize: 9, fontWeight: 700, padding: '1px 6px',
+                    borderRadius: 4, background: style.border + '22', color: style.text,
+                    letterSpacing: '0.05em'
+                  }}>
+                    {sev}
+                  </div>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.5, marginBottom: 10 }}>
+                {c.description?.substring(0, 120)}{(c.description?.length || 0) > 120 ? '...' : ''}
+              </div>
+
+              {/* Affected Files */}
+              <div style={{ fontSize: 10, color: '#475569', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Affected Files ({c.files?.length || 0})
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {files.map(f => (
+                  <span key={f} style={{
+                    fontSize: 10, padding: '2px 7px', borderRadius: 4,
+                    background: '#0f172a', border: `1px solid ${style.border}44`,
+                    color: '#94a3b8', fontFamily: 'monospace'
+                  }}>
+                    {f.split('/').pop()}
+                  </span>
+                ))}
+                {extraFiles > 0 && (
+                  <span style={{
+                    fontSize: 10, padding: '2px 7px', borderRadius: 4,
+                    background: '#0f172a', border: '1px solid #334155',
+                    color: '#475569'
+                  }}>
+                    +{extraFiles} more
+                  </span>
+                )}
+              </div>
+
+              {/* Issue count bar */}
+              <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ flex: 1, height: 3, background: '#1e293b', borderRadius: 2 }}>
+                  <div style={{
+                    height: '100%', borderRadius: 2,
+                    background: style.border,
+                    width: `${Math.min(100, ((c.issues?.length || 0) / 10) * 100)}%`
+                  }} />
+                </div>
+                <span style={{ fontSize: 10, color: style.text, fontWeight: 600 }}>
+                  {c.issues?.length || 0} issues linked
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
+
+
+
+// ====================== Styles ======================
 
 // ====================== Styles ======================
 
