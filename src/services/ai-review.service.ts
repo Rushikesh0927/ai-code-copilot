@@ -209,9 +209,9 @@ Output EXACTLY this JSON structure. Do not use Markdown formatting outside the J
       generationConfig: { responseMimeType: 'application/json', temperature: APP_CONFIG.AI.TEMPERATURE }
     });
 
-    // ⚡ 45-second timeout — never let correlation stall the whole scan
+    // ⚡ 25-second timeout — never let correlation stall the whole scan
     const timeoutPromise = new Promise<{ correlations: any[], architectureReview: string }>((_, reject) =>
-      setTimeout(() => reject(new Error('Correlation timeout after 45s')), 45000)
+      setTimeout(() => reject(new Error('Correlation timeout after 25s')), 25000)
     );
 
     const correlationPromise = (async () => {

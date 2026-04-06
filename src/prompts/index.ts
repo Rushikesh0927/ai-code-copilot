@@ -5,18 +5,10 @@
 // ============================================================
 
 import { SYSTEM_PROMPT } from './system-prompt';
-import { getBugDetectionPrompt } from './bug-detection';
-import { getSecurityPrompt } from './security';
-import { getCodeSmellPrompt } from './code-smell';
-import { getPerformancePrompt } from './performance';
-import { getScalabilityPrompt } from './scalability';
-import { getLintingPrompt } from './linting';
-import { getDesignPatternsPrompt } from './design-patterns';
-import { getErrorHandlingPrompt } from './error-handling';
-import { getAccessibilityPrompt } from './accessibility';
-import { getAPIDesignPrompt } from './api-design';
+export { SYSTEM_PROMPT };
 
-export * from './system-prompt';
+// Category prompts consolidated — the system prompt already covers all 11 categories.
+// Expanding 50KB of CWE/OWASP/patterns per file was adding 30-40s of AI "thinking" latency.
 
 // ============================================================
 // SECTION: Framework Detection from package.json
@@ -152,16 +144,17 @@ ${structureMap}
   return `
 ${SYSTEM_PROMPT}
 
-${getBugDetectionPrompt()}
-${getSecurityPrompt()}
-${getCodeSmellPrompt()}
-${getPerformancePrompt()}
-${getScalabilityPrompt()}
-${getLintingPrompt()}
-${getDesignPatternsPrompt()}
-${getErrorHandlingPrompt()}
-${getAccessibilityPrompt()}
-${getAPIDesignPrompt()}
+### CATEGORY CHECKLIST (Review EACH)
+- BUG: Null refs, unhandled exceptions, resource leaks, concurrency, dead code
+- SECURITY: SQL/NoSQL/OS injection, XSS, CSRF, hardcoded secrets, weak auth, insecure deps (OWASP/CWE)
+- CODE_SMELL: High complexity, poor naming, duplication, tight coupling
+- PERFORMANCE: N+1 queries, sync blocking I/O, missing caching, redundant computation
+- SCALABILITY: Single points of failure, unbounded queues, no rate limiting
+- LINTING: Style violations, inconsistent formatting
+- DESIGN_PATTERN: SOLID violations, missing abstractions, god classes
+- ERROR_HANDLING: Empty catch, missing error boundaries, no graceful degradation
+- ACCESSIBILITY: Missing ARIA labels, no keyboard nav, poor contrast in UI code
+- API_DESIGN: Non-RESTful routes, missing validation, inconsistent response shapes
 
 ---
 ${customRulesSection}

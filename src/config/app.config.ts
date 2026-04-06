@@ -10,7 +10,8 @@ export const APP_CONFIG = {
   // 1. AI & LLM Settings
   // ==========================================
   AI: {
-    // The core model used for analysis (e.g. 'gemini-2.5-flash', 'gemini-1.5-pro')
+    // gemini-2.5-flash: best accuracy for complex bug detection + structured JSON
+    // Speed gained from prompt consolidation (50KB→2KB category section), not model downgrade
     MODEL_NAME: 'gemini-2.5-flash',
     
     // Controls AI creativity. 
