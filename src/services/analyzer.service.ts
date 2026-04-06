@@ -363,10 +363,108 @@ export class AnalyzerService {
     }
   }
 
-  private async finalizeJob(jobId: string, url: string, type: 'PR' | 'REPO', repoName: string, totalFiles: number, totalLines: number, findings: Finding[], startTime: number) {
+  // ============================================================
+  // SECTION: ESLint Deduplication
+  // PURPOSE: Collapse repeated linting rules into summary findings
+  // WHY: ESLint fires the same rule 100× across files — unreadable
+  // ============================================================
+  private deduplicateLintFindings(findings: Finding[]): Finding[] {
+    const DEDUP_THRESHOLD = 5; // if same rule fires >5 times, cap it
+    const KEEP_TOP = 3;        // keep the 3 most informative instances
+
+    const linting = findings.filter(f => f.category === 'LINTING' || f.category === 'CODE_SMELL');
+    const other = findings.filter(f => f.category !== 'LINTING' && f.category !== 'CODE_SMELL');
+
+    // Group linting findings by rule (first 60 chars of title)
+    const ruleGroups = new Map<string, Finding[]>();
+    for (const f of linting) {
+      const key = (f.title || '').substring(0, 60).trim();
+      if (!ruleGroups.has(key)) ruleGroups.set(key, []);
+      ruleGroups.get(key)!.push(f);
+    }
+
+    const dedupedLinting: Finding[] = [];
+    let totalSuppressed = 0;
+
+    for (const [rule, group] of ruleGroups.entries()) {
+      if (group.length <= DEDUP_THRESHOLD) {
+        // Under threshold — keep all
+        dedupedLinting.push(...group);
+      } else {
+        // Over threshold — keep top N, collapse rest into summary
+        const sorted = [...group].sort((a, b) => {
+          const sevOrder = ['CRITICAL','HIGH','MEDIUM','LOW','INFORMATIONAL'];
+          return sevOrder.indexOf(a.severity) - sevOrder.indexOf(b.severity);
+        });
+        const kept = sorted.slice(0, KEEP_TOP);
+        const suppressed = group.length - KEEP_TOP;
+        totalSuppressed += suppressed;
+
+        dedupedLinting.push(...kept);
+        // Add a summary finding for the collapsed ones
+        dedupedLinting.push({
+          ...kept[0],
+          id: `dedup-${kept[0].id}`,
+          title: `[+${suppressed} more] ${rule}`,
+          description: `This rule triggered ${group.length} times across ${new Set(group.map(f => f.file)).size} files. Showing top ${KEEP_TOP} instances. ${suppressed} similar findings were suppressed to reduce noise.`,
+          file: `(${group.length} files affected)`,
+          line: 0,
+          severity: 'INFORMATIONAL' as any,
+          confidence: 100,
+        });
+      }
+    }
+
+    if (totalSuppressed > 0) {
+      console.log(`[Dedup] Suppressed ${totalSuppressed} redundant linting findings`);
+    }
+
+    return [...other, ...dedupedLinting];
+  }
+
+  private async finalizeJob(jobId: string, url: string, type: 'PR' | 'REPO', repoName: string, totalFiles: number, totalLines: number, rawFindings: Finding[], startTime: number) {
     await this.updateJob(jobId, { status: 'REVIEWING' });
 
+    // ⚡ Deduplicate repeated linting noise before correlating
+    const findings = this.deduplicateLintFindings(rawFindings);
+    const deduplicatedCount = rawFindings.length - findings.length;
+
     const { correlations, architectureReview } = await this.ai.correlateFindings(findings);
+
+    const duration_ms = Date.now() - startTime;
+    const summary = this.formatter.generateSummary(findings);
+    summary.architectureReview = architectureReview;
+    // @ts-ignore
+    summary.durationMs = duration_ms;
+    // @ts-ignore
+    summary.rawFindingsCount = rawFindings.length;
+    // @ts-ignore
+    summary.deduplicatedCount = deduplicatedCount;
+
+    // Fetch the user data from the job to persist into the result
+    const { data: job } = await supabase.from('jobs').select('user_id, user_name').eq('id', jobId).single();
+
+    await supabase.from('results').insert({
+      id: jobId,
+      url,
+      type,
+      repo_name: repoName,
+      total_files: totalFiles,
+      total_lines: totalLines,
+      findings,
+      correlations,
+      summary,
+      created_at: new Date().toISOString(),
+      duration_ms,
+      user_id: job?.user_id || null,
+      user_name: job?.user_name || null,
+    });
+
+    await this.updateJob(jobId, { status: 'COMPLETE', progress: 100 });
+  }
+}
+
+
 
     const duration_ms = Date.now() - startTime;
     const summary = this.formatter.generateSummary(findings);

@@ -27,7 +27,7 @@ const CAT_COLORS: Record<string, string> = {
   INLINE_SUGGESTION: '#64748b',
 };
 
-type Section = 'summary' | 'issues' | 'findings' | 'correlation';
+type Section = 'summary' | 'issues' | 'findings' | 'correlation' | 'hotspots';
 
 interface Props { result: ReviewResult; }
 
@@ -36,6 +36,7 @@ export default function ReviewDashboard({ result }: Props) {
   const [section, setSection] = useState<Section>('summary');
   const [sevFilter, setSevFilter] = useState<string>('ALL');
   const [catFilter, setCatFilter] = useState<string>('ALL');
+  const [confThreshold, setConfThreshold] = useState<number>(0); // 0 = show all
   const [openCards, setOpenCards] = useState<Set<string>>(new Set());
   const [fixingId, setFixingId] = useState<string | null>(null);
   const [fixedSet, setFixedSet] = useState<Set<string>>(new Set());
@@ -85,9 +86,18 @@ export default function ReviewDashboard({ result }: Props) {
     return result.findings.filter(f => {
       const sv = sevFilter === 'ALL' || f.severity === sevFilter;
       const ct = catFilter === 'ALL' || f.category === catFilter;
-      return sv && ct;
+      const cf = (f.confidence ?? 100) >= confThreshold;
+      return sv && ct && cf;
     });
-  }, [result.findings, sevFilter, catFilter]);
+  }, [result.findings, sevFilter, catFilter, confThreshold]);
+
+  const suppressedByConf = result.findings.length - filteredFindings.length - (
+    result.findings.filter(f => {
+      const sv = sevFilter === 'ALL' || f.severity === sevFilter;
+      const ct = catFilter === 'ALL' || f.category === catFilter;
+      return sv && ct;
+    }).length - filteredFindings.length
+  );
 
   const total = result.findings.length || 1;
   const score = result.summary.overallScore;
@@ -191,7 +201,27 @@ export default function ReviewDashboard({ result }: Props) {
         <SbItem active={section === 'issues'} onClick={() => navTo('issues')} icon="◉" label="Issue Summary" />
         <SbItem active={section === 'findings'} onClick={() => navTo('findings')} icon="💬" label="Detailed Findings" count={filteredFindings.length} />
         <SbItem active={section === 'correlation'} onClick={() => navTo('correlation')} icon="⑂" label="Correlation Mapping" />
+        <SbItem active={section === 'hotspots'} onClick={() => navTo('hotspots')} icon="🔥" label="Risk Hotspots" count={fileRisk.length} />
 
+        {/* Confidence Filter */}
+        <div style={{ ...styles.sbSection, marginTop: 16 }}>CONFIDENCE FILTER</div>
+        <div style={{ padding: '4px 16px 12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', marginBottom: 6 }}>
+            <span>Min confidence</span>
+            <span style={{ color: confThreshold > 0 ? '#f97316' : '#64748b', fontWeight: 600 }}>{confThreshold}%</span>
+          </div>
+          <input
+            type="range" min={0} max={95} step={5}
+            value={confThreshold}
+            onChange={e => setConfThreshold(Number(e.target.value))}
+            style={{ width: '100%', accentColor: '#6366f1', cursor: 'pointer' }}
+          />
+          {confThreshold > 0 && (
+            <div style={{ fontSize: 10, color: '#f97316', marginTop: 4 }}>
+              {result.findings.filter(f => (f.confidence ?? 100) < confThreshold).length} low-confidence issues hidden
+            </div>
+          )}
+        </div>
         <div style={{ ...styles.sbSection, marginTop: 16 }}>FILTER BY SEVERITY</div>
         <SbItem active={sevFilter === 'ALL' && section === 'findings'} onClick={() => filterSev('ALL')} dot="#888" label="All Issues" count={result.findings.length} />
         {(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFORMATIONAL'] as Severity[]).map(sev => (
@@ -377,6 +407,11 @@ export default function ReviewDashboard({ result }: Props) {
               ))}
             </div>
 
+            {confThreshold > 0 && (
+              <div style={{ padding: '6px 12px', background: '#1a0f00', border: '1px solid #f9731633', borderRadius: 6, fontSize: 11, color: '#f97316', marginBottom: 8 }}>
+                🔍 Confidence filter active ({confThreshold}%+) — {result.findings.filter(f => (f.confidence ?? 100) < confThreshold).length} low-confidence issues hidden
+              </div>
+            )}
             {filteredFindings.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 32, color: '#94a3b8' }}>No issues match the selected filters.</div>
             ) : (
@@ -510,6 +545,67 @@ export default function ReviewDashboard({ result }: Props) {
                 ))}
               </>
             )}
+          </div>
+        )}
+
+        {/* --- RISK HOTSPOTS --- */}
+        {section === 'hotspots' && (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#e2e8f0', marginBottom: 4 }}>🔥 Risk Hotspots</div>
+              <div style={{ fontSize: 12, color: '#64748b' }}>Top {fileRisk.length} files ranked by severity-weighted risk score (Critical×15 + High×8 + Medium×4 + Low×1)</div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {fileRisk.map((fr, i) => {
+                const riskScore = fr.CRITICAL * 15 + fr.HIGH * 8 + fr.MEDIUM * 4 + fr.LOW * 1;
+                const maxScore = (fileRisk[0]?.CRITICAL ?? 0) * 15 + (fileRisk[0]?.HIGH ?? 0) * 8 + (fileRisk[0]?.MEDIUM ?? 0) * 4 + (fileRisk[0]?.LOW ?? 0) * 1 || 1;
+                const pct = Math.round((riskScore / maxScore) * 100);
+                const topSev = fr.CRITICAL > 0 ? 'CRITICAL' : fr.HIGH > 0 ? 'HIGH' : fr.MEDIUM > 0 ? 'MEDIUM' : 'LOW';
+                return (
+                  <div
+                    key={fr.file}
+                    onClick={() => { setCatFilter('ALL'); setSevFilter('ALL'); setSection('findings'); }}
+                    style={{
+                      background: '#0b1120', border: '1px solid #1e293b', borderRadius: 10,
+                      padding: '14px 16px', cursor: 'pointer', transition: 'border-color 0.2s',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.borderColor = SEV_COLORS[topSev]?.dot || '#334155')}
+                    onMouseLeave={e => (e.currentTarget.style.borderColor = '#1e293b')}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                      {/* Rank */}
+                      <div style={{
+                        width: 28, height: 28, borderRadius: 8, background: i === 0 ? '#3d1515' : i === 1 ? '#3d2c10' : '#1a2a1a',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 13, fontWeight: 700, color: i === 0 ? '#ff6b6b' : i === 1 ? '#fbbf24' : '#86efac', flexShrink: 0
+                      }}>
+                        #{i + 1}
+                      </div>
+                      {/* File path */}
+                      <div style={{ flex: 1, fontSize: 12, fontFamily: 'monospace', color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {fr.file}
+                      </div>
+                      {/* Risk score */}
+                      <div style={{ fontSize: 12, fontWeight: 700, color: SEV_COLORS[topSev]?.text || '#94a3b8', flexShrink: 0 }}>
+                        Risk: {riskScore}
+                      </div>
+                    </div>
+                    {/* Heat bar */}
+                    <div style={{ height: 4, background: '#1e293b', borderRadius: 2, marginBottom: 8 }}>
+                      <div style={{ height: '100%', width: `${pct}%`, borderRadius: 2, background: SEV_COLORS[topSev]?.text || '#94a3b8', transition: 'width 0.3s' }} />
+                    </div>
+                    {/* Severity chips */}
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {fr.CRITICAL > 0 && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: '#3d1515', color: '#ff6b6b', fontWeight: 600 }}>⬤ {fr.CRITICAL} Critical</span>}
+                      {fr.HIGH > 0 && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: '#3d2c10', color: '#fbbf24', fontWeight: 600 }}>⬤ {fr.HIGH} High</span>}
+                      {fr.MEDIUM > 0 && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: '#152940', color: '#60a5fa', fontWeight: 600 }}>⬤ {fr.MEDIUM} Medium</span>}
+                      {fr.LOW > 0 && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: '#1a3012', color: '#86efac', fontWeight: 600 }}>⬤ {fr.LOW} Low</span>}
+                      {fr.INFORMATIONAL > 0 && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: '#1e1740', color: '#a78bfa' }}>⬤ {fr.INFORMATIONAL} Info</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
