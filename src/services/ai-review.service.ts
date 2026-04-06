@@ -128,6 +128,10 @@ export class AIReviewService {
           return [];
       }
 
+      // Strip line-number prefixes the AI copies from our numbered prompt
+      // e.g. "   43 | code here" → "code here"
+      const stripNums = (s: string) => s ? s.replace(/^\s*\d+\s*\|\s?/gm, '') : '';
+
       // Map raw findings to our strict type system
       return parsed.findings.map((f: any) => ({
         id: uuidv4(),
@@ -140,8 +144,8 @@ export class AIReviewService {
         description: f.description || '',
         suggestion: f.suggestion || '',
         impact: f.impact || '',
-        codeSnippet: f.codeSnippet || '',
-        fixSnippet: f.fixSnippet || '',
+        codeSnippet: stripNums(f.codeSnippet || ''),
+        fixSnippet: stripNums(f.fixSnippet || ''),
         confidence: f.confidence || 50,
       }));
 
