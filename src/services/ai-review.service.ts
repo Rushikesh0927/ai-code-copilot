@@ -232,3 +232,4 @@ Output EXACTLY this JSON structure. Do not use Markdown formatting outside the J
       return { correlations: [], architectureReview: "Correlation analysis skipped (timeout or error)." };
     }
   }
+}

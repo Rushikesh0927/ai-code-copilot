@@ -463,34 +463,3 @@ export class AnalyzerService {
     await this.updateJob(jobId, { status: 'COMPLETE', progress: 100 });
   }
 }
-
-
-
-    const duration_ms = Date.now() - startTime;
-    const summary = this.formatter.generateSummary(findings);
-    summary.architectureReview = architectureReview;
-    // @ts-ignore
-    summary.durationMs = duration_ms;
-
-    // Fetch the user data from the job to persist into the result
-    const { data: job } = await supabase.from('jobs').select('user_id, user_name').eq('id', jobId).single();
-
-    await supabase.from('results').insert({
-      id: jobId,
-      url,
-      type,
-      repo_name: repoName,
-      total_files: totalFiles,
-      total_lines: totalLines,
-      findings,
-      correlations,
-      summary,
-      created_at: new Date().toISOString(),
-      duration_ms,
-      user_id: job?.user_id || null,
-      user_name: job?.user_name || null,
-    });
-
-    await this.updateJob(jobId, { status: 'COMPLETE', progress: 100 });
-  }
-}
