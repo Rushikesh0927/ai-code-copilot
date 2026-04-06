@@ -146,6 +146,9 @@ Use these boundaries to correctly localize scoped issues (like missing 'await' o
 ${structureMap}
 ` : '';
 
+  // Number each line so the AI returns accurate line numbers
+  const numberedCode = code.split('\n').map((line, i) => `${String(i + 1).padStart(4, ' ')} | ${line}`).join('\n');
+
   return `
 ${SYSTEM_PROMPT}
 
@@ -170,8 +173,12 @@ ${structureSection}
 File: ${filepath}
 Language: ${language}
 
+IMPORTANT: The code below has line numbers prepended (e.g. "   1 | code here").
+You MUST use these exact line numbers in the "line" field of every finding.
+Do NOT guess line numbers — read them directly from the numbered prefix.
+
 \`\`\`${language}
-${code}
+${numberedCode}
 \`\`\`
 
 Now, review the TARGET CODE and output the JSON array of findings.

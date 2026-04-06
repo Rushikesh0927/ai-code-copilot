@@ -154,8 +154,9 @@ export default function ReviewDashboard({ result }: Props) {
         body: JSON.stringify({ 
           filePath: f.file, 
           snippet: f.codeSnippet, 
-          replacement: f.suggestion,
-          repoUrl: isGithub ? result.url : undefined
+          replacement: f.fixSnippet || f.suggestion,
+          repoUrl: isGithub ? result.url : undefined,
+          line: f.line  // ← pass line number for fallback matching
         })
       });
       if (res.ok) {

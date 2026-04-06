@@ -161,6 +161,11 @@ export class AIReviewService {
       return { correlations: [], architectureReview: "No significant architectural issues detected." };
     }
 
+    // ⚡ Skip expensive correlation for very small finding sets — saves 20-60s
+    if (findings.length < 5) {
+      return { correlations: [], architectureReview: "Repository is clean — fewer than 5 issues found. No systemic patterns detected." };
+    }
+
     const compact = findings.map(f => ({
       id: f.id,
       file: f.file,
@@ -200,7 +205,12 @@ Output EXACTLY this JSON structure. Do not use Markdown formatting outside the J
       generationConfig: { responseMimeType: 'application/json', temperature: APP_CONFIG.AI.TEMPERATURE }
     });
 
-    try {
+    // ⚡ 45-second timeout — never let correlation stall the whole scan
+    const timeoutPromise = new Promise<{ correlations: any[], architectureReview: string }>((_, reject) =>
+      setTimeout(() => reject(new Error('Correlation timeout after 45s')), 45000)
+    );
+
+    const correlationPromise = (async () => {
       const result = await model.generateContent(prompt);
       let text = result.response.text();
       // Robust JSON extraction: strip markdown fences, find JSON object
@@ -213,9 +223,12 @@ Output EXACTLY this JSON structure. Do not use Markdown formatting outside the J
         correlations: parsed.correlations || [],
         architectureReview: parsed.architectureReview || "Analysis completed successfully."
       };
+    })();
+
+    try {
+      return await Promise.race([correlationPromise, timeoutPromise]);
     } catch (error) {
       console.error("Failed to run correlation engine:", error);
-      return { correlations: [], architectureReview: "Correlation analysis failed to run." };
+      return { correlations: [], architectureReview: "Correlation analysis skipped (timeout or error)." };
     }
   }
-}
