@@ -71,6 +71,10 @@ export class AIReviewService {
         // Enforce JSON output so we can parse it reliably
         responseMimeType: 'application/json',
         temperature: APP_CONFIG.AI.TEMPERATURE, // Low temperature for more analytical/consistent responses
+        // ⚡ Cap internal "thinking" to 2048 tokens — prevents 50-60s reasoning loops
+        // while preserving analysis quality. Default unlimited thinking was the #1 latency source.
+        // @ts-ignore — thinkingConfig is supported by Gemini 2.5 but not yet in all SDK type defs
+        thinkingConfig: { thinkingBudget: 2048 },
       },
       safetySettings: [
         {
@@ -206,7 +210,12 @@ Output EXACTLY this JSON structure. Do not use Markdown formatting outside the J
 
     const model = this.genAI.getGenerativeModel({
       model: this.modelName,
-      generationConfig: { responseMimeType: 'application/json', temperature: APP_CONFIG.AI.TEMPERATURE }
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: APP_CONFIG.AI.TEMPERATURE,
+        // @ts-ignore
+        thinkingConfig: { thinkingBudget: 1024 },
+      }
     });
 
     // ⚡ 25-second timeout — never let correlation stall the whole scan
