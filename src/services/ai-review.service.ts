@@ -26,15 +26,20 @@ export class AIReviewService {
   // ============================================================
   // SECTION: Embeddings Engine (RAG)
   // PURPOSE: Generate vectors to find correlated code contexts
+  // NOTE: Only used when SKIP_REPO_EMBEDDINGS = false in app.config.ts
   // ============================================================
   async generateEmbedding(text: string): Promise<number[]> {
     try {
-      const embedModelToUse = this.genAI.getGenerativeModel({ model: "text-embedding-004" });
-      const result = await embedModelToUse.embedContent(text);
+      // text-embedding-004 requires the embedContent call via the embedding-specific model path
+      const embedModel = this.genAI.getGenerativeModel({ model: 'text-embedding-004' });
+      const result = await embedModel.embedContent({
+        content: { parts: [{ text: text.substring(0, 8000) }], role: 'user' },
+        taskType: 'RETRIEVAL_DOCUMENT' as any,
+      });
       return result.embedding.values;
     } catch (err) {
-      console.error("Failed to generate embedding:", err);
-      return [];
+      console.error('Failed to generate embedding (non-fatal, skipping):', err);
+      return []; // Always return empty — never crash the main scan
     }
   }
 

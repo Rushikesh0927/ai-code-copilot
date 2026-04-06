@@ -19,8 +19,9 @@ export const APP_CONFIG = {
     TEMPERATURE: 0.2, 
     
     // How many files to send to the AI simultaneously
-    // Lower = slower but safer for rate limits
-    MAX_CONCURRENT_FILES: 10,
+    // ⚡ 60 parallel calls — paid Gemini API tier (1000+ RPM limit)
+    // If 429 errors appear in Vercel logs, reduce back to 40
+    MAX_CONCURRENT_FILES: 60,
     
     // Max lines of code to send to the AI per file
     // Prevents giant auto-generated files from crashing the context window
@@ -45,14 +46,18 @@ export const APP_CONFIG = {
   // ==========================================
   VECTOR: {
     // How many files to generate embeddings for at once
-    EMBEDDING_BATCH_SIZE: 10,
+    EMBEDDING_BATCH_SIZE: 20,
     
     // Similarity threshold (0.0 to 1.0). Higher means files must be *very* similar to match
-    // Controls how "related" code is pulled in for cross-file bug detection
     MATCH_THRESHOLD: 0.6, 
     
     // Maximum number of related files to inject into the AI's prompt context
-    MAX_CONTEXT_FILES: 2, 
+    MAX_CONTEXT_FILES: 2,
+
+    // ⚡ PERFORMANCE: Skip embedding phase for REPO scans entirely.
+    // This removes 200 extra API calls and 400 Supabase round-trips.
+    // The correlation engine (2nd AI pass) handles cross-file analysis.
+    SKIP_REPO_EMBEDDINGS: true,
   },
 
   // ==========================================

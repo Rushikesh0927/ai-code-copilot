@@ -155,23 +155,26 @@ export class AnalyzerService {
       const allFindings: Finding[] = [];
 
       // 2. Ingestion Phase — Embed files into Supabase pgvector (BATCHED)
-      const EMBED_BATCH = APP_CONFIG.VECTOR.EMBEDDING_BATCH_SIZE;
-      for (let ei = 0; ei < filesToReview.length; ei += EMBED_BATCH) {
-        const embedBatch = filesToReview.slice(ei, ei + EMBED_BATCH);
-        await Promise.all(embedBatch.map(async (file) => {
-          try {
-            const textToEmbed = (file.patch || "").substring(0, 5000);
-            const vec = await this.ai.generateEmbedding(textToEmbed);
-            if (vec.length > 0) {
-              await supabase.from('file_embeddings').insert({
-                job_id: jobId,
-                path: file.filename,
-                content: file.patch!.substring(0, 8000),
-                embedding: JSON.stringify(vec),
-              });
-            }
-          } catch (e) { console.error(`Embed error ${file.filename}:`, e); }
-        }));
+      // ⚡ Guarded by SKIP_REPO_EMBEDDINGS — skips 200 API calls for faster scans
+      if (!APP_CONFIG.VECTOR.SKIP_REPO_EMBEDDINGS) {
+        const EMBED_BATCH = APP_CONFIG.VECTOR.EMBEDDING_BATCH_SIZE;
+        for (let ei = 0; ei < filesToReview.length; ei += EMBED_BATCH) {
+          const embedBatch = filesToReview.slice(ei, ei + EMBED_BATCH);
+          await Promise.all(embedBatch.map(async (file) => {
+            try {
+              const textToEmbed = (file.patch || '').substring(0, 5000);
+              const vec = await this.ai.generateEmbedding(textToEmbed);
+              if (vec.length > 0) {
+                await supabase.from('file_embeddings').insert({
+                  job_id: jobId,
+                  path: file.filename,
+                  content: file.patch!.substring(0, 8000),
+                  embedding: JSON.stringify(vec),
+                });
+              }
+            } catch (e) { console.error(`Embed error ${file.filename}:`, e); }
+          }));
+        }
       }
 
       // 4. Analyze with RAG context from pgvector
@@ -247,23 +250,26 @@ export class AnalyzerService {
       const packageJsonContent = pkgFile?.content;
 
       // 3. Ingestion Phase — Embed files into Supabase pgvector (BATCHED)
-      const EMBED_BATCH = APP_CONFIG.VECTOR.EMBEDDING_BATCH_SIZE;
-      for (let ei = 0; ei < filesToReview.length; ei += EMBED_BATCH) {
-        const embedBatch = filesToReview.slice(ei, ei + EMBED_BATCH);
-        await Promise.all(embedBatch.map(async (file) => {
-          try {
-            const textToEmbed = file.content.substring(0, 5000);
-            const vec = await this.ai.generateEmbedding(textToEmbed);
-            if (vec.length > 0) {
-              await supabase.from('file_embeddings').insert({
-                job_id: jobId,
-                path: file.path,
-                content: file.content.substring(0, 8000),
-                embedding: JSON.stringify(vec),
-              });
-            }
-          } catch (e) { console.error(`Embed error ${file.path}:`, e); }
-        }));
+      // ⚡ Skip embeddings for REPO scans — saves ~200 API calls + 400 DB round-trips
+      if (!APP_CONFIG.VECTOR.SKIP_REPO_EMBEDDINGS) {
+        const EMBED_BATCH = APP_CONFIG.VECTOR.EMBEDDING_BATCH_SIZE;
+        for (let ei = 0; ei < filesToReview.length; ei += EMBED_BATCH) {
+          const embedBatch = filesToReview.slice(ei, ei + EMBED_BATCH);
+          await Promise.all(embedBatch.map(async (file) => {
+            try {
+              const textToEmbed = file.content.substring(0, 5000);
+              const vec = await this.ai.generateEmbedding(textToEmbed);
+              if (vec.length > 0) {
+                await supabase.from('file_embeddings').insert({
+                  job_id: jobId,
+                  path: file.path,
+                  content: file.content.substring(0, 8000),
+                  embedding: JSON.stringify(vec),
+                });
+              }
+            } catch (e) { console.error(`Embed error ${file.path}:`, e); }
+          }));
+        }
       }
 
       await this.updateJob(jobId, { status: 'ANALYZING' });
@@ -282,21 +288,22 @@ export class AnalyzerService {
         const batchPromises = batch.map(async (file) => {
           try {
             let relatedContext = '';
-            
-            // Re-use the embedding we just inserted in Phase 3
-            const { data: fe } = await supabase.from('file_embeddings').select('embedding').eq('job_id', jobId).eq('path', file.path).single();
-            const currentVecStr = fe?.embedding;
 
-            if (currentVecStr) {
-              const { data: matches } = await supabase.rpc('match_related_files', {
-                query_embedding: currentVecStr,
-                match_threshold: APP_CONFIG.VECTOR.MATCH_THRESHOLD,
-                match_count: APP_CONFIG.VECTOR.MAX_CONTEXT_FILES,
-                p_job_id: jobId,
-              });
-              if (matches && matches.length > 0) {
-                const filtered = matches.filter((m: any) => m.path !== file.path);
-                relatedContext = filtered.map((m: any) => `FILE: ${m.path}\n${m.content.substring(0, 3000)}`).join('\n\n');
+            // Only do RAG lookup if embeddings were generated
+            if (!APP_CONFIG.VECTOR.SKIP_REPO_EMBEDDINGS) {
+              const { data: fe } = await supabase.from('file_embeddings').select('embedding').eq('job_id', jobId).eq('path', file.path).single();
+              const currentVecStr = fe?.embedding;
+              if (currentVecStr) {
+                const { data: matches } = await supabase.rpc('match_related_files', {
+                  query_embedding: currentVecStr,
+                  match_threshold: APP_CONFIG.VECTOR.MATCH_THRESHOLD,
+                  match_count: APP_CONFIG.VECTOR.MAX_CONTEXT_FILES,
+                  p_job_id: jobId,
+                });
+                if (matches && matches.length > 0) {
+                  const filtered = matches.filter((m: any) => m.path !== file.path);
+                  relatedContext = filtered.map((m: any) => `FILE: ${m.path}\n${m.content.substring(0, 3000)}`).join('\n\n');
+                }
               }
             }
 
@@ -307,7 +314,7 @@ export class AnalyzerService {
               structureMap = functions.map((f: any) => `- ${f.name} (Lines ${f.startLine}-${f.endLine})`).join('\n');
             }
 
-            // Statis Pre-Pass (Spec A8/B14)
+            // Static Pre-Pass (Spec A8/B14)
             const lintResults = await runESLintPrePass(file.content, file.path);
             const staticFindings: any[] = lintResults.map((l: any) => ({
               id: uuidv4(),
@@ -335,10 +342,13 @@ export class AnalyzerService {
 
         const results = await Promise.all(batchPromises);
         results.forEach(findings => allFindings.push(...findings));
-        
+
         processedFiles += batch.length;
-        const progress = Math.round((processedFiles / filesToReview.length) * 100);
-        await this.updateJob(jobId, { processed_files: processedFiles, progress });
+        // ⚡ Only write progress to DB every 20 files to reduce Supabase overhead
+        if (processedFiles % 20 === 0 || processedFiles === filesToReview.length) {
+          const progress = Math.round((processedFiles / filesToReview.length) * 100);
+          await this.updateJob(jobId, { processed_files: processedFiles, progress });
+        }
       }
 
       // 5. Format and Finish
