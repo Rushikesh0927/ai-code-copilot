@@ -344,11 +344,9 @@ export class AnalyzerService {
         results.forEach(findings => allFindings.push(...findings));
 
         processedFiles += batch.length;
-        // ⚡ Only write progress to DB every 20 files to reduce Supabase overhead
-        if (processedFiles % 20 === 0 || processedFiles === filesToReview.length) {
-          const progress = Math.round((processedFiles / filesToReview.length) * 100);
-          await this.updateJob(jobId, { processed_files: processedFiles, progress });
-        }
+        // ⚡ Write progress to DB after every batch for snappy UI
+        const progress = Math.round((processedFiles / filesToReview.length) * 100);
+        await this.updateJob(jobId, { processed_files: processedFiles, progress });
       }
 
       // 5. Format and Finish

@@ -21,13 +21,18 @@ This is a Next.js application. You only need an API key to run it.
    \`\`\`
 
 2. **Configure Environment Variables**
-   Create a \`.env.local\` file in the root directory:
-   \`\`\`env
+   CREATE a `.env.local` file in the root directory and add the following keys. 
+   *(Note for Eli Lilly Reviewers: I will provide my test keys during the demo, or you can provision a free Supabase project)*
+   ```env
    GEMINI_API_KEY=your_gemini_api_key_here
+   
+   # Required for Job State & Vector Embeddings
+   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
    
    # Optional: For analyzing private repositories or bypassing public rate limits
    GITHUB_TOKEN=your_github_personal_access_token
-   \`\`\`
+   ```
 
 3. **Run the Development Server**
    \`\`\`bash

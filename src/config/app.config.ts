@@ -20,9 +20,8 @@ export const APP_CONFIG = {
     TEMPERATURE: 0.2, 
     
     // How many files to send to the AI simultaneously
-    // ⚡ 60 parallel calls — paid Gemini API tier (1000+ RPM limit)
-    // If 429 errors appear in Vercel logs, reduce back to 40
-    MAX_CONCURRENT_FILES: 60,
+    // ⚡ 5 parallel calls — prevents 429 timeouts on standard/free API keys and keeps execution steady
+    MAX_CONCURRENT_FILES: 5,
     
     // Max lines of code to send to the AI per file
     // Prevents giant auto-generated files from crashing the context window

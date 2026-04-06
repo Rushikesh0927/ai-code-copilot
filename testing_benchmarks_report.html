@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AI Code Review Copilot — Benchmark Report</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', -apple-system, sans-serif; background: #0d1117; color: #c9d1d9; padding: 40px; }
+    .container { max-width: 1100px; margin: 0 auto; }
+    .hero { text-align: center; margin-bottom: 40px; }
+    .hero h1 { font-size: 28px; color: #f0f6fc; margin-bottom: 8px; }
+    .hero p { color: #8b949e; font-size: 14px; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 30px; }
+    .metric { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; text-align: center; }
+    .metric .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #8b949e; margin-bottom: 8px; }
+    .metric .value { font-size: 32px; font-weight: 700; }
+    .green { color: #3fb950; }
+    .yellow { color: #d29922; }
+    .blue { color: #58a6ff; }
+    .detail-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 30px; }
+    .detail-metric { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
+    .detail-metric .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #8b949e; }
+    .detail-metric .value { font-size: 22px; font-weight: 600; margin-top: 4px; }
+    .bar { height: 6px; background: #21262d; border-radius: 3px; margin-top: 8px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 3px; }
+    h2 { color: #f0f6fc; font-size: 20px; margin: 30px 0 15px; }
+    .methodology { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-top: 30px; font-size: 13px; color: #8b949e; line-height: 1.8; }
+    .methodology h3 { color: #58a6ff; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="hero">
+    <h1>🚀 AI Code Review Copilot — Benchmark Report</h1>
+    <p>Model: gemini-2.5-flash &nbsp;|&nbsp; Files: 3 test vectors &nbsp;|&nbsp; 6 April 2026</p>
+  </div>
+
+  <div class="grid">
+    <div class="metric">
+      <div class="label">F1 Accuracy Score</div>
+      <div class="value green">89.5%</div>
+      <div class="bar"><div class="bar-fill" style="width:89%;background:#3fb950;"></div></div>
+    </div>
+    <div class="metric">
+      <div class="label">Efficiency (Avg/File)</div>
+      <div class="value blue">20.5s</div>
+      <div class="bar"><div class="bar-fill" style="width:79%;background:#58a6ff;"></div></div>
+    </div>
+    <div class="metric">
+      <div class="label">Reliability</div>
+      <div class="value green">52.5%</div>
+      <div class="bar"><div class="bar-fill" style="width:52%;background:#3fb950;"></div></div>
+    </div>
+    <div class="metric">
+      <div class="label">Fix Generation Rate</div>
+      <div class="value yellow">100.0%</div>
+      <div class="bar"><div class="bar-fill" style="width:100%;background:#d29922;"></div></div>
+    </div>
+  </div>
+
+  <div class="detail-grid">
+    <div class="detail-metric">
+      <div class="label">Precision (Signal vs Noise)</div>
+      <div class="value green">85.0%</div>
+      <p style="font-size:11px;color:#8b949e;margin-top:4px;">TP: 17 | FP: 3</p>
+    </div>
+    <div class="detail-metric">
+      <div class="label">Recall (Bug Coverage)</div>
+      <div class="value blue">94.4%</div>
+      <p style="font-size:11px;color:#8b949e;margin-top:4px;">Found: 17 | Missed: 1</p>
+    </div>
+    <div class="detail-metric">
+      <div class="label">Total Scan Time</div>
+      <div class="value yellow">61.5s</div>
+      <p style="font-size:11px;color:#8b949e;margin-top:4px;">3 files (20 total findings)</p>
+    </div>
+  </div>
+
+  <h2>📋 Per-File Results</h2>
+  
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin-bottom:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="color:#58a6ff;margin:0;">📁 perf_smells.tsx</h3>
+        <div style="display:flex;gap:15px;font-size:13px;color:#8b949e;">
+          <span>⏱️ 23.2s</span>
+          <span>🎯 86%</span>
+          <span>🔄 49% consistent</span>
+        </div>
+      </div>
+      <div style="margin:12px 0;display:flex;gap:8px;">
+        <span style="background:#3fb95022;color:#3fb950;padding:3px 10px;border-radius:12px;font-size:12px;">TP: 6</span>
+        <span style="background:#f8514922;color:#f85149;padding:3px 10px;border-radius:12px;font-size:12px;">Missed: 1</span>
+        <span style="background:#d2992222;color:#d29922;padding:3px 10px;border-radius:12px;font-size:12px;">Extra: 1</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin-top:10px;">
+        <tr style="border-bottom:1px solid #30363d;"><th style="padding:8px;color:#8b949e;text-align:left;">Match</th><th style="padding:8px;color:#8b949e;text-align:left;">Line</th><th style="padding:8px;color:#8b949e;text-align:left;">Severity</th><th style="padding:8px;color:#8b949e;text-align:left;">Category</th><th style="padding:8px;color:#8b949e;text-align:left;">Title</th><th style="padding:8px;color:#8b949e;text-align:left;">Fix?</th></tr>
+        <tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#3fb950;">✅</td>
+        <td style="padding:8px;">L10</td>
+        <td style="padding:8px;"><span style="background:#d2992222;color:#d29922;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #d2992255;">HIGH</span></td>
+        <td style="padding:8px;">PERFORMANCE</td>
+        <td style="padding:8px;">N+1 Query Problem in `loadDashboard`</td>
+        <td style="padding:8px;">✅</td>
+      </tr><tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#3fb950;">✅</td>
+        <td style="padding:8px;">L21</td>
+        <td style="padding:8px;"><span style="background:#d2992222;color:#d29922;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #d2992255;">HIGH</span></td>
+        <td style="padding:8px;">PERFORMANCE</td>
+        <td style="padding:8px;">WebSocket Memory Leak - Missing Cleanup in `useEffect`</td>
+        <td style="padding:8px;">✅</td>
+      </tr><tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#3fb950;">✅</td>
+        <td style="padding:8px;">L32</td>
+        <td style="padding:8px;"><span style="background:#2f81f722;color:#2f81f7;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #2f81f755;">MEDIUM</span></td>
+        <td style="padding:8px;">CODE_SMELL</td>
+        <td style="padding:8px;">God Function / Violation of Single Responsibility Principle</td>
+        <td style="padding:8px;">✅</td>
+      </tr><tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#3fb950;">✅</td>
+        <td style="padding:8px;">L72</td>
+        <td style="padding:8px;"><span style="background:#2f81f722;color:#2f81f7;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #2f81f755;">MEDIUM</span></td>
+        <td style="padding:8px;">CODE_SMELL</td>
+        <td style="padding:8px;">Duplicate Code in Name Formatting Functions</td>
+        <td style="padding:8px;">✅</td>
+      </tr><tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#3fb950;">✅</td>
+        <td style="padding:8px;">L83</td>
+        <td style="padding:8px;"><span style="background:#2f81f722;color:#2f81f7;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #2f81f755;">MEDIUM</span></td>
+        <td style="padding:8px;">CODE_SMELL</td>
+        <td style="padding:8px;">Magic Numbers in `calculateShipping`</td>
+        <td style="padding:8px;">✅</td>
+      </tr><tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#3fb950;">✅</td>
+        <td style="padding:8px;">L95</td>
+        <td style="padding:8px;"><span style="background:#2f81f722;color:#2f81f7;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #2f81f755;">MEDIUM</span></td>
+        <td style="padding:8px;">DESIGN_PATTERN</td>
+        <td style="padding:8px;">Missing Error Handling for API Calls in `UserProfile`</td>
+        <td style="padding:8px;">✅</td>
+      </tr><tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#d29922;">⚠️</td>
+        <td style="padding:8px;">L103</td>
+        <td style="padding:8px;"><span style="background:#2f81f722;color:#2f81f7;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #2f81f755;">MEDIUM</span></td>
+        <td style="padding:8px;">DESIGN_PATTERN</td>
+        <td style="padding:8px;">Tight Coupling and Lack of Dependency Injection in `OrderService`</td>
+        <td style="padding:8px;">✅</td>
+      </tr>
+        <tr style="border-bottom:1px solid #21262d;background:#f8514911;">
+        <td style="padding:8px;">❌</td>
+        <td style="padding:8px;">L64</td>
+        <td style="padding:8px;"><span style="background:#2f81f722;color:#2f81f7;padding:2px 8px;border-radius:10px;font-size:11px;">MEDIUM</span></td>
+        <td style="padding:8px;">CODE_SMELL</td>
+        <td style="padding:8px;color:#f85149;">MISSED: Duplicate code</td>
+        <td style="padding:8px;">—</td>
+      </tr>
+      </table>
+    </div>
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin-bottom:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="color:#58a6ff;margin:0;">📁 sql_injection.py</h3>
+        <div style="display:flex;gap:15px;font-size:13px;color:#8b949e;">
+          <span>⏱️ 19.5s</span>
+          <span>🎯 100%</span>
+          <span>🔄 41% consistent</span>
+        </div>
+      </div>
+      <div style="margin:12px 0;display:flex;gap:8px;">
+        <span style="background:#3fb95022;color:#3fb950;padding:3px 10px;border-radius:12px;font-size:12px;">TP: 5</span>
+        <span style="background:#f8514922;color:#f85149;padding:3px 10px;border-radius:12px;font-size:12px;">Missed: 0</span>
+        <span style="background:#d2992222;color:#d29922;padding:3px 10px;border-radius:12px;font-size:12px;">Extra: 2</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin-top:10px;">
+        <tr style="border-bottom:1px solid #30363d;"><th style="padding:8px;color:#8b949e;text-align:left;">Match</th><th style="padding:8px;color:#8b949e;text-align:left;">Line</th><th style="padding:8px;color:#8b949e;text-align:left;">Severity</th><th style="padding:8px;color:#8b949e;text-align:left;">Category</th><th style="padding:8px;color:#8b949e;text-align:left;">Title</th><th style="padding:8px;color:#8b949e;text-align:left;">Fix?</th></tr>
+        <tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#3fb950;">✅</td>
+        <td style="padding:8px;">L14</td>
+        <td style="padding:8px;"><span style="background:#f8514922;color:#f85149;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #f8514955;">CRITICAL</span></td>
+        <td style="padding:8px;">SECURITY</td>
+        <td style="padding:8px;">SQL Injection via string concatenation</td>
+        <td style="padding:8px;">✅</td>
+      </tr><tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#3fb950;">✅</td>
+        <td style="padding:8px;">L21</td>
+        <td style="padding:8px;"><span style="background:#f8514922;color:#f85149;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #f8514955;">CRITICAL</span></td>
+        <td style="padding:8px;">SECURITY</td>
+        <td style="padding:8px;">SQL Injection via f-string interpolation</td>
+        <td style="padding:8px;">✅</td>
+      </tr><tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#3fb950;">✅</td>
+        <td style="padding:8px;">L25</td>
+        <td style="padding:8px;"><span style="background:#d2992222;color:#d29922;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #d2992255;">HIGH</span></td>
+        <td style="padding:8px;">SECURITY</td>
+        <td style="padding:8px;">Hardcoded sensitive credentials</td>
+        <td style="padding:8px;">✅</td>
+      </tr><tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#3fb950;">✅</td>
+        <td style="padding:8px;">L33</td>
+        <td style="padding:8px;"><span style="background:#f8514922;color:#f85149;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #f8514955;">CRITICAL</span></td>
+        <td style="padding:8px;">SECURITY</td>
+        <td style="padding:8px;">SQL Injection and missing input validation in financial transaction</td>
+        <td style="padding:8px;">✅</td>
+      </tr><tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#3fb950;">✅</td>
+        <td style="padding:8px;">L40</td>
+        <td style="padding:8px;"><span style="background:#f8514922;color:#f85149;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #f8514955;">CRITICAL</span></td>
+        <td style="padding:8px;">SECURITY</td>
+        <td style="padding:8px;">Debug mode enabled in production</td>
+        <td style="padding:8px;">✅</td>
+      </tr><tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#d29922;">⚠️</td>
+        <td style="padding:8px;">L8</td>
+        <td style="padding:8px;"><span style="background:#2f81f722;color:#2f81f7;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #2f81f755;">MEDIUM</span></td>
+        <td style="padding:8px;">CODE_SMELL</td>
+        <td style="padding:8px;">Global database connection and resource leak</td>
+        <td style="padding:8px;">✅</td>
+      </tr><tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#d29922;">⚠️</td>
+        <td style="padding:8px;">L14</td>
+        <td style="padding:8px;"><span style="background:#3fb95022;color:#3fb950;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #3fb95055;">LOW</span></td>
+        <td style="padding:8px;">ERROR_HANDLING</td>
+        <td style="padding:8px;">Missing error handling for database operations</td>
+        <td style="padding:8px;">✅</td>
+      </tr>
+        
+      </table>
+    </div>
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin-bottom:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="color:#58a6ff;margin:0;">📁 xss_auth.js</h3>
+        <div style="display:flex;gap:15px;font-size:13px;color:#8b949e;">
+          <span>⏱️ 18.8s</span>
+          <span>🎯 100%</span>
+          <span>🔄 67% consistent</span>
+        </div>
+      </div>
+      <div style="margin:12px 0;display:flex;gap:8px;">
+        <span style="background:#3fb95022;color:#3fb950;padding:3px 10px;border-radius:12px;font-size:12px;">TP: 6</span>
+        <span style="background:#f8514922;color:#f85149;padding:3px 10px;border-radius:12px;font-size:12px;">Missed: 0</span>
+        <span style="background:#d2992222;color:#d29922;padding:3px 10px;border-radius:12px;font-size:12px;">Extra: 0</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin-top:10px;">
+        <tr style="border-bottom:1px solid #30363d;"><th style="padding:8px;color:#8b949e;text-align:left;">Match</th><th style="padding:8px;color:#8b949e;text-align:left;">Line</th><th style="padding:8px;color:#8b949e;text-align:left;">Severity</th><th style="padding:8px;color:#8b949e;text-align:left;">Category</th><th style="padding:8px;color:#8b949e;text-align:left;">Title</th><th style="padding:8px;color:#8b949e;text-align:left;">Fix?</th></tr>
+        <tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#3fb950;">✅</td>
+        <td style="padding:8px;">L11</td>
+        <td style="padding:8px;"><span style="background:#f8514922;color:#f85149;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #f8514955;">CRITICAL</span></td>
+        <td style="padding:8px;">SECURITY</td>
+        <td style="padding:8px;">Reflected XSS via unsanitized user input in res.send</td>
+        <td style="padding:8px;">✅</td>
+      </tr><tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#3fb950;">✅</td>
+        <td style="padding:8px;">L17</td>
+        <td style="padding:8px;"><span style="background:#f8514922;color:#f85149;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #f8514955;">CRITICAL</span></td>
+        <td style="padding:8px;">SECURITY</td>
+        <td style="padding:8px;">Stored XSS via unsanitized user-generated content</td>
+        <td style="padding:8px;">✅</td>
+      </tr><tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#3fb950;">✅</td>
+        <td style="padding:8px;">L23</td>
+        <td style="padding:8px;"><span style="background:#d2992222;color:#d29922;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #d2992255;">HIGH</span></td>
+        <td style="padding:8px;">SECURITY</td>
+        <td style="padding:8px;">Missing CSRF protection on state-changing POST endpoint</td>
+        <td style="padding:8px;">✅</td>
+      </tr><tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#3fb950;">✅</td>
+        <td style="padding:8px;">L30</td>
+        <td style="padding:8px;"><span style="background:#f8514922;color:#f85149;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #f8514955;">CRITICAL</span></td>
+        <td style="padding:8px;">SECURITY</td>
+        <td style="padding:8px;">Weak JWT secret</td>
+        <td style="padding:8px;">✅</td>
+      </tr><tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#3fb950;">✅</td>
+        <td style="padding:8px;">L36</td>
+        <td style="padding:8px;"><span style="background:#d2992222;color:#d29922;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #d2992255;">HIGH</span></td>
+        <td style="padding:8px;">SECURITY</td>
+        <td style="padding:8px;">JWTs issued without an expiration time</td>
+        <td style="padding:8px;">✅</td>
+      </tr><tr style="border-bottom:1px solid #21262d;">
+        <td style="padding:8px;color:#3fb950;">✅</td>
+        <td style="padding:8px;">L48</td>
+        <td style="padding:8px;"><span style="background:#f8514922;color:#f85149;padding:2px 8px;border-radius:10px;font-size:11px;border:1px solid #f8514955;">CRITICAL</span></td>
+        <td style="padding:8px;">SECURITY</td>
+        <td style="padding:8px;">Path Traversal vulnerability in file serving</td>
+        <td style="padding:8px;">✅</td>
+      </tr>
+        
+      </table>
+    </div>
+
+  <div class="methodology">
+    <h3>📐 Testing Methodology</h3>
+    <strong>Accuracy:</strong> We planted 18 known bugs across 3 files (SQL injection, XSS, path traversal, memory leaks, code smells, design issues). Each bug has a documented line number, category, and severity. The AI's findings are matched against ground truth with ±5 line tolerance.<br>
+    <strong>Precision:</strong> TP / (TP + FP) — measures signal-to-noise ratio. High precision = fewer false alarms.<br>
+    <strong>Recall:</strong> TP / (TP + FN) — measures bug coverage. High recall = fewer missed vulnerabilities.<br>
+    <strong>F1 Score:</strong> Harmonic mean of Precision and Recall — the single best accuracy metric.<br>
+    <strong>Efficiency:</strong> Wall-clock time per file scan (includes API latency + prompt processing).<br>
+    <strong>Reliability:</strong> Each file is scanned 3 times. Jaccard similarity between run results measures consistency. 100% = identical findings every run.<br>
+    <strong>Fix Quality:</strong> Percentage of detected bugs that include a compilable fixSnippet (drop-in replacement code).<br>
+    <strong>Impact:</strong> Critical/High bugs detected vs missed — weighted by severity to measure real-world risk reduction.
+  </div>
+</div>
+</body>
+</html>
