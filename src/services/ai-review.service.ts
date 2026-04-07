@@ -99,9 +99,20 @@ export class AIReviewService {
         const isRateLimit = error?.status === 429 || error?.status === 503 || error?.message?.includes('503') || error?.message?.includes('429');
         
         if (isRateLimit && retries > 0) {
-          console.warn(`[AI Review Capacity for ${filepath}]: 503/429 hit. Retrying in ${delayMs}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delayMs));
-          delayMs *= 2; // Exponential backoff
+          // Attempt to parse dynamic quota delay from Gemini API error message
+          // Error format: "Please retry in 49.34s."
+          let dynamicDelay = delayMs;
+          const retryMatch = error?.message?.match(/Please retry in ([\d\.]+)s/);
+          if (retryMatch && retryMatch[1]) {
+             dynamicDelay = Math.ceil(parseFloat(retryMatch[1]) * 1000) + 2000; // API delay + 2s buffer
+             console.warn(`[AI Quota Limit for ${filepath}]: Parsing Google dynamic backoff. Retrying in ${dynamicDelay}ms...`);
+          } else {
+             console.warn(`[AI Review Capacity for ${filepath}]: 503/429 hit. Retrying in ${delayMs}ms...`);
+          }
+
+          await new Promise(resolve => setTimeout(resolve, dynamicDelay));
+          delayMs = dynamicDelay * 1.5; // Exponential backoff scaling for next failure
+
         } else {
           console.error(`[AI Review Error for ${filepath}]:`, error);
           return [];
@@ -218,9 +229,9 @@ Output EXACTLY this JSON structure. Do not use Markdown formatting outside the J
       }
     });
 
-    // ⚡ 25-second timeout — never let correlation stall the whole scan
+    // ⚡ 60-second timeout — Generating correlation clusters for huge repos takes a bit longer
     const timeoutPromise = new Promise<{ correlations: any[], architectureReview: string }>((_, reject) =>
-      setTimeout(() => reject(new Error('Correlation timeout after 25s')), 25000)
+      setTimeout(() => reject(new Error('Correlation timeout after 60s')), 60000)
     );
 
     const correlationPromise = (async () => {

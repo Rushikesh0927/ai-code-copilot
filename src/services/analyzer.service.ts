@@ -220,6 +220,10 @@ export class AnalyzerService {
         processedFiles += batch.length;
         const progress = Math.round((processedFiles / filesToReview.length) * 100);
         await this.updateJob(jobId, { processed_files: processedFiles, progress });
+
+        if (APP_CONFIG.AI.BATCH_DELAY_MS > 0 && i + MAX_CONCURRENT < filesToReview.length) {
+          await new Promise(resolve => setTimeout(resolve, APP_CONFIG.AI.BATCH_DELAY_MS));
+        }
       }
 
       // 4. Format and Finish
@@ -347,6 +351,10 @@ export class AnalyzerService {
         // ⚡ Write progress to DB after every batch for snappy UI
         const progress = Math.round((processedFiles / filesToReview.length) * 100);
         await this.updateJob(jobId, { processed_files: processedFiles, progress });
+
+        if (APP_CONFIG.AI.BATCH_DELAY_MS > 0 && i + MAX_CONCURRENT < filesToReview.length) {
+          await new Promise(resolve => setTimeout(resolve, APP_CONFIG.AI.BATCH_DELAY_MS));
+        }
       }
 
       // 5. Format and Finish

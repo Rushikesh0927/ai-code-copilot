@@ -20,8 +20,13 @@ export const APP_CONFIG = {
     TEMPERATURE: 0.2, 
     
     // How many files to send to the AI simultaneously
-    // ⚡ 5 parallel calls — prevents 429 timeouts on standard/free API keys and keeps execution steady
-    MAX_CONCURRENT_FILES: 5,
+    // ⚡ 100 parallel calls — Unleashes the full 1,000 RPM / 1M TPM paid quota!
+    // This will blast the entire 35-file benchmark repo simultaneously.
+    MAX_CONCURRENT_FILES: 100,
+    
+    // Forced artificial delay between batches to respect free tier (15 Requests Per Minute).
+    // Set to 0 because Paid Gemini API Tier handles up to 1000+ RPM.
+    BATCH_DELAY_MS: 0,
     
     // Max lines of code to send to the AI per file
     // Prevents giant auto-generated files from crashing the context window
