@@ -15,7 +15,7 @@ import { useSession, signIn, signOut } from 'next-auth/react';
 
 export default function Home() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { data: session, status } = useSession();           //check login
   
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<AnalysisJob | null>(null);
