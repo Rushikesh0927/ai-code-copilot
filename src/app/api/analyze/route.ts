@@ -7,9 +7,14 @@
 import { NextResponse } from 'next/server';
 import { parseGitHubUrl, isValidGitHubUrl } from '../../../utils/parser';
 import { analyzer } from '../../../services';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '../auth/[...nextauth]/route';
 
 export async function POST(req: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    const accessToken = (session as any)?.accessToken; // NextAuth injects this from OAuth
+    
     const body = await req.json();
     const { url, userId, userName } = body;
 
@@ -32,7 +37,8 @@ export async function POST(req: Request) {
         parsedUrl.prNumber!,
         url,
         userId,
-        userName
+        userName,
+        accessToken
       );
     } else {
       jobId = await analyzer.startRepoAnalysis(
@@ -41,7 +47,8 @@ export async function POST(req: Request) {
         parsedUrl.branch,
         url,
         userId,
-        userName
+        userName,
+        accessToken
       );
     }
 

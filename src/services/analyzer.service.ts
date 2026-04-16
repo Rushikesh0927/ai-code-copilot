@@ -81,7 +81,7 @@ export class AnalyzerService {
   // ============================================================
   // SECTION: Start PR Analysis (Async Background Task)
   // ============================================================
-  async startPRAnalysis(owner: string, repo: string, prNumber: number, url: string, userId?: string, userName?: string): Promise<string> {
+  async startPRAnalysis(owner: string, repo: string, prNumber: number, url: string, userId?: string, userName?: string, accessToken?: string): Promise<string> {
     const jobId = uuidv4();
 
     await supabase.from('jobs').insert({
@@ -96,7 +96,7 @@ export class AnalyzerService {
       user_name: userName || null
     });
 
-    this.processPRBackground(jobId, owner, repo, prNumber, url).catch(async (err: any) => {
+    this.processPRBackground(jobId, owner, repo, prNumber, url, accessToken).catch(async (err: any) => {
       console.error(`Job ${jobId} failed:`, err);
       await this.updateJob(jobId, { status: 'ERROR', error: String(err) });
     });
@@ -107,7 +107,7 @@ export class AnalyzerService {
   // ============================================================
   // SECTION: Start Repo Analysis (Async Background Task)
   // ============================================================
-  async startRepoAnalysis(owner: string, repo: string, branch: string | undefined, url: string, userId?: string, userName?: string): Promise<string> {
+  async startRepoAnalysis(owner: string, repo: string, branch: string | undefined, url: string, userId?: string, userName?: string, accessToken?: string): Promise<string> {
     const jobId = uuidv4();
 
     await supabase.from('jobs').insert({
@@ -122,7 +122,7 @@ export class AnalyzerService {
       user_name: userName || null
     });
 
-    this.processRepoBackground(jobId, owner, repo, branch, url).catch(async (err: any) => {
+    this.processRepoBackground(jobId, owner, repo, branch, url, accessToken).catch(async (err: any) => {
       console.error(`Job ${jobId} failed:`, err);
       await this.updateJob(jobId, { status: 'ERROR', error: String(err) });
     });
@@ -132,13 +132,14 @@ export class AnalyzerService {
 
   // --- Background workers ---
 
-  private async processPRBackground(jobId: string, owner: string, repo: string, prNumber: number, url: string) {
+  private async processPRBackground(jobId: string, owner: string, repo: string, prNumber: number, url: string, accessToken?: string) {
     const startTime = Date.now();
 
     try {
       // 1. Fetch
       await this.updateJob(jobId, { status: 'FETCHING' });
-      const files = await this.github.getPRFiles(owner, repo, prNumber);
+      const github = new GitHubService(accessToken);
+      const files = await github.getPRFiles(owner, repo, prNumber);
 
       // Extract package.json for framework/dependency awareness
       let packageJsonContent: string | undefined;
@@ -234,17 +235,18 @@ export class AnalyzerService {
     }
   }
 
-  private async processRepoBackground(jobId: string, owner: string, repo: string, branch: string | undefined, url: string) {
+  private async processRepoBackground(jobId: string, owner: string, repo: string, branch: string | undefined, url: string, accessToken?: string) {
     const startTime = Date.now();
     let cloneDir = '';
+    const github = new GitHubService(accessToken);
 
     try {
       // 1. Clone
       await this.updateJob(jobId, { status: 'FETCHING' });
-      cloneDir = await this.github.cloneRepository(owner, repo, branch);
+      cloneDir = await github.cloneRepository(owner, repo, branch);
 
       // 2. Read Files
-      const allLocalFiles = await this.github.getLocalFiles(cloneDir);
+      const allLocalFiles = await github.getLocalFiles(cloneDir);
       const filesToReview = allLocalFiles.slice(0, APP_CONFIG.SYSTEM.MAX_FILES_TO_ANALYZE);
       const totalLines = filesToReview.reduce((sum, file) => sum + file.lines, 0);
       await this.updateJob(jobId, { total_files: filesToReview.length });
@@ -364,7 +366,7 @@ export class AnalyzerService {
       throw err;
     } finally {
       if (cloneDir) {
-        await this.github.cleanupRepo(cloneDir);
+        await github.cleanupRepo(cloneDir);
       }
     }
   }
@@ -437,8 +439,24 @@ export class AnalyzerService {
 
     const { correlations, architectureReview } = await this.ai.correlateFindings(findings);
 
+    // ⚡ Payload Compaction: Prevent Supabase from rejecting massive payloads!
+    let compressedFindings = findings;
+    
+    // Sort so we definitely keep the most dangerous bugs if we exceed limits
+    const sevScore = { 'CRITICAL': 5, 'HIGH': 4, 'MEDIUM': 3, 'LOW': 2, 'INFORMATIONAL': 1 };
+    compressedFindings.sort((a, b) => sevScore[b.severity] - sevScore[a.severity]);
+
+    // Cap to 100 findings total, and strictly truncate long AST strings.
+    compressedFindings = compressedFindings.slice(0, 100).map(f => ({
+       ...f,
+       description: f.description?.substring(0, 1500) || '',
+       suggestion: f.suggestion?.substring(0, 1500) || '',
+       codeSnippet: f.codeSnippet?.substring(0, 3000) || '',
+       fixSnippet: f.fixSnippet?.substring(0, 3000) || ''
+    }));
+
     const duration_ms = Date.now() - startTime;
-    const summary = this.formatter.generateSummary(findings);
+    const summary = this.formatter.generateSummary(compressedFindings);
     summary.architectureReview = architectureReview;
     // @ts-ignore
     summary.durationMs = duration_ms;
@@ -450,14 +468,14 @@ export class AnalyzerService {
     // Fetch the user data from the job to persist into the result
     const { data: job } = await supabase.from('jobs').select('user_id, user_name').eq('id', jobId).single();
 
-    await supabase.from('results').insert({
+    const { error: insertError } = await supabase.from('results').insert({
       id: jobId,
       url,
       type,
       repo_name: repoName,
       total_files: totalFiles,
       total_lines: totalLines,
-      findings,
+      findings: compressedFindings, // ⚡ Insert the safely compressed payload
       correlations,
       summary,
       created_at: new Date().toISOString(),
@@ -465,6 +483,12 @@ export class AnalyzerService {
       user_id: job?.user_id || null,
       user_name: job?.user_name || null,
     });
+
+    if (insertError) {
+      console.error(`[DB ERROR] Failed to insert final results for job ${jobId}:`, insertError);
+      await this.updateJob(jobId, { status: 'ERROR', error: 'Failed to save analysis results to database. Payload may be too large.' });
+      return;
+    }
 
     await this.updateJob(jobId, { status: 'COMPLETE', progress: 100 });
   }

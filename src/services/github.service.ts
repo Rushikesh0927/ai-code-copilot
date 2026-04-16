@@ -15,10 +15,12 @@ import { SUPPORTED_EXTENSIONS, SKIP_PATTERNS, EXTENSION_TO_LANGUAGE } from '../u
 
 export class GitHubService {
   private octokit: Octokit;
+  private token: string | undefined;
 
   constructor(token?: string) {
+    this.token = token || process.env.GITHUB_TOKEN;
     this.octokit = new Octokit({
-      auth: token || process.env.GITHUB_TOKEN,
+      auth: this.token,
     });
   }
 
@@ -31,8 +33,7 @@ export class GitHubService {
     await fs.ensureDir(cloneDir);
 
     const git: SimpleGit = simpleGit();
-    const token = process.env.GITHUB_TOKEN;
-    const url = getCloneUrl(owner, repo, token);
+    const url = getCloneUrl(owner, repo, this.token);
 
     try {
       const options = ['--depth', '1'];
